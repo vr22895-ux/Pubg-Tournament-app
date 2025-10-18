@@ -1,0 +1,33 @@
+# Node / Next
+node_modules/
+.next/
+out/
+dist/
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log
+
+# Editor / OS
+.vscode/
+.DS_Store
+__MACOSX/
+
+# Android / Gradle
+android/.gradle/
+android/app/build/
+android/build/
+.gradle/
+!android/gradle/wrapper/gradle-wrapper.properties
+# keep gradle wrapper files but ignore local caches
+
+# Keystores and secrets
+*.keystore
+*.jks
+.env
+.env.local
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
