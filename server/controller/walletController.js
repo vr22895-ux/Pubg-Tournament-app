@@ -173,11 +173,11 @@ const initiateAddMoney = async (req, res) => {
       }
     };
     
-    // Generate signature for Cashfree
-    const signature = generateCashfreeSignature(paymentData, CASHFREE_CONFIG.secretKey);
-    
-    // For development/testing - bypass Cashfree and simulate success
-    if (true) { // Always skip payment for testing
+  // For development/testing - bypass Cashfree and simulate success
+  // NOTE: signature generation depends on a configured CASHFREE secret key.
+  // Generate the signature only when performing real Cashfree requests to avoid
+  // runtime errors in development/test mode when the secret key is missing.
+  if (true) { // Always skip payment for testing
       // Simulate successful payment for testing - don't open real payment URL
       const paymentUrl = `http://localhost:3000/wallet?test_payment=true&order_id=${orderId}&amount=${amount}`;
       
@@ -194,6 +194,11 @@ const initiateAddMoney = async (req, res) => {
       });
       return;
     }
+
+    // Generate signature for Cashfree (only for real payment requests)
+    const signature = CASHFREE_CONFIG.secretKey
+      ? generateCashfreeSignature(paymentData, CASHFREE_CONFIG.secretKey)
+      : null;
 
     // Make request to Cashfree
     const cashfreeResponse = await fetch(`${CASHFREE_CONFIG.apiUrl}/orders`, {
@@ -241,7 +246,9 @@ const initiateAddMoney = async (req, res) => {
     
   } catch (error) {
     console.error('Error in initiateAddMoney:', error);
-    res.status(500).json({ success: false, error: 'Server error' });
+    // In development include the actual error message to aid debugging.
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ success: false, error: isProd ? 'Server error' : (error.message || 'Server error') });
   }
 };
 

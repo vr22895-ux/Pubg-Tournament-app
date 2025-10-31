@@ -225,7 +225,19 @@ const App = () => {
       },
     ]
 
-    const renderMatch = ({ item }) => (
+    type Match = {
+      id: number
+      name: string
+      startTime: string
+      entryFee: number
+      prizePool: number
+      playersJoined: number
+      maxPlayers: number
+      map: string
+      timeLeft: string
+    }
+
+    const renderMatch = ({ item }: { item: Match }) => (
       <View style={styles.matchCard}>
         <View style={styles.matchHeader}>
           <View style={styles.matchImageContainer}>
@@ -407,7 +419,9 @@ const App = () => {
       { id: 4, name: "", pubgId: "", level: 0, isLeader: false, status: "empty" },
     ]
 
-    const renderSquadMember = (member, index) => (
+  type SquadMember = { id: number; name: string; pubgId: string; level: number; isLeader: boolean; status: string }
+
+  const renderSquadMember = (member: SquadMember, index: number) => (
       <View key={index} style={styles.squadMemberContainer}>
         {member.status === "empty" ? (
           <View style={styles.emptySlot}>
@@ -558,7 +572,9 @@ const App = () => {
       },
     ]
 
-    const renderTransaction = ({ item }) => (
+  type Transaction = { id: number; type: string; amount: number; description: string; time: string; status: string }
+
+  const renderTransaction = ({ item }: { item: Transaction }) => (
       <View style={styles.transactionItem}>
         <View
           style={[
@@ -725,7 +741,7 @@ const App = () => {
     return (
       <View style={styles.bottomNav}>
         <LinearGradient colors={["#000000f0", "#000000"]} style={styles.bottomNavGradient}>
-          {navItems.map((item) => (
+          {navItems.map((item: { icon: string; label: string; screen: string }) => (
             <TouchableOpacity
               key={item.screen}
               style={[styles.navItem, currentScreen === item.screen && styles.navItemActive]}
