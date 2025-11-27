@@ -34,7 +34,7 @@ const API_BASE = "http://localhost:5050/api";
 // const API_BASE = "/api";
 
 // Types
-type MapName = "Erangel" | "Sanhok" | "Miramar" | "Vikendi";
+type MapName = "Erangel" | "Livik" | "Sanhok" | "Miramar" | "Vikendi";
 
 type RankRewardItem = {
   rank: "1st Place" | "2nd Place" | "3rd Place" | "4th Place" | "5th Place";
@@ -178,7 +178,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
     setManageLoading(true);
     setManageErr(null);
     try {
-      const response = await axios.get(`${API_BASE}/matches/management`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/matches/management`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setManageRows(response.data.data);
       } else {
@@ -194,7 +197,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   // Cancel a match
   const cancelMatch = async (matchId: string) => {
     try {
-      const response = await axios.post(`${API_BASE}/matches/${matchId}/cancel`);
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_BASE}/matches/${matchId}/cancel`, { 
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast("Match cancelled successfully!", "success");
         loadMatches(); // Refresh the list
@@ -213,7 +219,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
     }
     
     try {
-      const response = await axios.delete(`${API_BASE}/matches/${matchId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`${API_BASE}/matches/${matchId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast("Match deleted successfully!", "success");
         loadMatches(); // Refresh the list
@@ -229,7 +238,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   const loadMatchDetails = async (matchId: string) => {
     setMatchDetailsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/matches/${matchId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/matches/${matchId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setSelectedMatchForDetails(response.data.data);
       } else {
@@ -246,7 +258,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   const loadCompletedMatches = async () => {
     setResultsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/matches/completed`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/matches/completed`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setCompletedMatches(response.data.data);
       }
@@ -260,7 +275,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   // Auto-update match statuses
   const handleAutoUpdateStatuses = async () => {
     try {
-      const response = await axios.post(`${API_BASE}/matches/auto-update-statuses`);
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_BASE}/matches/auto-update-statuses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast(`Statuses updated: ${response.data.data.started} started, ${response.data.data.completed} completed`, "success");
         // Refresh the matches list
@@ -282,7 +300,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
       setMatchParticipants([]);
       
       // Real implementation would be:
-      // const response = await axios.get(`${API_BASE}/matches/${matchId}/participants`);
+      // const token = localStorage.getItem('token');
+      // const response = await axios.get(`${API_BASE}/matches/${matchId}/participants`, {
+      //   headers: { Authorization: `Bearer ${token}` }
+      // });
       // if (response.data?.success) {
       //   setMatchParticipants(response.data.data);
       // }
@@ -365,12 +386,15 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
 
     setUploadingResults(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/matches/${selectedMatch._id}/results`, {
         matchId: selectedMatch._id,
         results: {
           ...resultsForm,
           squadRankings: validRankings,
         },
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data?.success) {
@@ -458,6 +482,7 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
       const startISO = new Date(form.startTime).toISOString();
 
       // ✅ axios used directly here
+      const token = localStorage.getItem('token');
       await axios.post(
         `${API_BASE}/matches`,
         {
@@ -472,7 +497,7 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
         {
           // set to true only if you actually use cookies/sessions and enabled CORS creds on server
           withCredentials: false,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         }
       );
 
@@ -520,7 +545,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
         ...(status !== 'all' && { status })
       });
 
-      const response = await axios.get(`${API_BASE}/admin/users?${params}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/admin/users?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setUsers(response.data.data);
         setUserPagination(response.data.pagination);
@@ -539,10 +567,13 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   const updateUserStatus = async (userId: string, status: string, reason: string, adminNotes: string) => {
     setUserActionLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await axios.patch(`${API_BASE}/admin/users/${userId}/status`, {
         status,
         reason,
         adminNotes
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data?.success) {
@@ -563,10 +594,13 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   const banUser = async (userId: string, reason: string, duration: string, adminNotes: string) => {
     setUserActionLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/admin/users/${userId}/ban`, {
         reason,
         duration,
         adminNotes
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data?.success) {
@@ -587,8 +621,11 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   const unbanUser = async (userId: string, adminNotes: string) => {
     setUserActionLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/admin/users/${userId}/unban`, {
         adminNotes
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data?.success) {
@@ -608,7 +645,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
   // Get user details
   const loadUserDetails = async (userId: string) => {
     try {
-      const response = await axios.get(`${API_BASE}/admin/users/${userId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/admin/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setSelectedUser(response.data.data);
       } else {
@@ -633,11 +673,14 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
 
     setBulkActionLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const promises = selectedUsers.map(userId => 
         axios.post(`${API_BASE}/admin/users/${userId}/ban`, {
           reason: bulkBanForm.reason,
           duration: bulkBanForm.duration,
           adminNotes: bulkBanForm.adminNotes
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
         })
       );
 
@@ -692,10 +735,13 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
         return;
       }
 
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/admin/users/${user._id}/ban`, {
         reason,
         duration,
         adminNotes
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data?.success) {
@@ -724,7 +770,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
       if (search) params.append('search', search);
       if (status && status !== 'all') params.append('status', status);
       
-      const response = await axios.get(`${API_BASE}/squads?${params}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/squads?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setSquads(response.data.data);
         setSquadPagination(response.data.pagination);
@@ -740,7 +789,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
 
   const loadSquadDetails = async (squadId: string) => {
     try {
-      const response = await axios.get(`${API_BASE}/squads/${squadId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/squads/${squadId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         setSelectedSquad(response.data.data);
         setEditSquadForm({
@@ -762,7 +814,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
     
     setSquadActionLoading(true);
     try {
-      const response = await axios.put(`${API_BASE}/squads/${selectedSquad._id}`, editSquadForm);
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`${API_BASE}/squads/${selectedSquad._id}`, editSquadForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast("Squad updated successfully", "success");
         setShowEditSquad(false);
@@ -785,7 +840,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
     
     setSquadActionLoading(true);
     try {
-      const response = await axios.delete(`${API_BASE}/squads/${squadId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`${API_BASE}/squads/${squadId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast("Squad deleted successfully", "success");
         loadSquads(squadPagination.page, squadSearch, squadStatusFilter);
@@ -808,7 +866,10 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
     
     setSquadActionLoading(true);
     try {
-      const response = await axios.delete(`${API_BASE}/squads/${squadId}/members/${userId}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`${API_BASE}/squads/${squadId}/members/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success) {
         showToast("Member removed successfully", "success");
         loadSquadDetails(squadId);

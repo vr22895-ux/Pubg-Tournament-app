@@ -64,7 +64,10 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
       
       console.log('Loading squad for user:', currentUser._id);
       
-      const response = await axios.get(`${API_BASE}/squads/user/${currentUser._id}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/squads/my-squad`, {
+        headers: {Authorization: `Bearer ${token}` }
+      });
       console.log('Squad response:', response.data);
       
       if (response.data.success) {
@@ -110,11 +113,14 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
       const currentUser = getCurrentUser();
       if (!currentUser) return;
       
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/squads`, {
         name: squadName,
-        leaderId: currentUser._id,
+        // leaderId removed. Server uses the token to get the leaderId
         leaderName: currentUser.name,
         leaderPubgId: currentUser.pubgId
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
@@ -153,10 +159,13 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
       const currentUser = getCurrentUser();
       if (!currentUser) return;
       
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/squads/${squadId}/join-request`, {
-        userId: currentUser._id,
+        // userId removed. Server uses the token to get the userId
         userName: currentUser.name,
         userPubgId: currentUser.pubgId
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
@@ -181,14 +190,18 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
       if (squad.leader.toString() === currentUser._id) {
         // Leader can't leave, must delete squad
         if (confirm("As the leader, leaving will delete the squad. Continue?")) {
-          await axios.delete(`${API_BASE}/squads/${squad._id}`);
+          const token = localStorage.getItem('token');
+          await axios.delete(`${API_BASE}/squads/${squad._id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           showToast("Squad deleted", "success");
           setSquad(null);
         }
       } else {
         // Regular member can leave using the leave endpoint
+        const token = localStorage.getItem('token');
         await axios.post(`${API_BASE}/squads/${squad._id}/leave`, {
-          userId: currentUser._id
+          headers: { Authorization: `Bearer ${token}` }
         });
         showToast("Left squad successfully", "success");
         setSquad(null);
@@ -233,9 +246,10 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     if (!confirm("Are you sure you want to remove this member?")) return;
     
     try {
+      const token = localStorage.getItem('token');
       console.log('Making DELETE request to:', `${API_BASE}/squads/${squad._id}/members/${memberId}`);
       const response = await axios.delete(`${API_BASE}/squads/${squad._id}/members/${memberId}`, {
-        data: { userId: currentUser._id }
+        headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Remove member response:', response.data);
       
