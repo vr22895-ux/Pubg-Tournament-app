@@ -6,23 +6,41 @@ const crypto = require('crypto');
 const CASHFREE_CONFIG = {
   appId: process.env.CASHFREE_APP_ID,
   secretKey: process.env.CASHFREE_SECRET_KEY,
-  apiUrl: process.env.NODE_ENV === 'production' 
-    ? 'https://api.cashfree.com/pg' 
+  apiUrl: process.env.NODE_ENV === 'production'
+    ? 'https://api.cashfree.com/pg'
     : 'https://sandbox.cashfree.com/pg',
   webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET
 };
 
-// Get user's wallet
-const getUserWallet = async (req, res) => {
+// Get user's wallet (Secure)
+const getMyWallet = async (req, res) => {
   try {
-    const { userId } = req.params;
-    
+    const userId = req.user.userId;
+
     const wallet = await Wallet.findOne({ userId, status: 'active' });
-    
+
     if (!wallet) {
       return res.status(404).json({ success: false, message: 'Wallet not found' });
     }
-    
+
+    res.json({ success: true, data: wallet });
+  } catch (error) {
+    console.error('Error in getMyWallet:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+// Get user's wallet (Legacy/Admin)
+const getUserWallet = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const wallet = await Wallet.findOne({ userId, status: 'active' });
+
+    if (!wallet) {
+      return res.status(404).json({ success: false, message: 'Wallet not found' });
+    }
+
     res.json({ success: true, data: wallet });
   } catch (error) {
     console.error('Error in getUserWallet:', error);
@@ -33,14 +51,15 @@ const getUserWallet = async (req, res) => {
 // Create new wallet
 const createWallet = async (req, res) => {
   try {
-    const { userId, userName, userEmail } = req.body;
-    
+    const { userName, userEmail } = req.body;
+    const userId = req.user.userId;
+
     // Check if wallet already exists
     const existingWallet = await Wallet.findOne({ userId });
     if (existingWallet) {
       return res.status(400).json({ success: false, error: 'Wallet already exists for this user' });
     }
-    
+
     // Create new wallet
     const wallet = new Wallet({
       userId,
@@ -51,9 +70,9 @@ const createWallet = async (req, res) => {
       totalWithdrawals: 0,
       status: 'active'
     });
-    
+
     await wallet.save();
-    
+
     res.json({ success: true, data: wallet });
   } catch (error) {
     console.error('Error in createWallet:', error);
@@ -66,22 +85,22 @@ const getWalletTransactions = async (req, res) => {
   try {
     const { walletId } = req.params;
     const { page = 1, limit = 20 } = req.query;
-    
+
     const wallet = await Wallet.findById(walletId);
     if (!wallet) {
       return res.status(404).json({ success: false, error: 'Wallet not found' });
     }
-    
+
     // Sort transactions by creation date (newest first)
-    const sortedTransactions = wallet.transactions.sort((a, b) => 
+    const sortedTransactions = wallet.transactions.sort((a, b) =>
       new Date(b.createdAt) - new Date(a.createdAt)
     );
-    
+
     // Apply pagination
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + parseInt(limit);
     const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex);
-    
+
     res.json({
       success: true,
       data: paginatedTransactions,
@@ -101,47 +120,41 @@ const getWalletTransactions = async (req, res) => {
 // Initiate add money (Cashfree payment)
 const initiateAddMoney = async (req, res) => {
   try {
-    const { walletId } = req.params;
-    const { amount, userId, userEmail, userPhone } = req.body;
-    
-    console.log('Add money request:', { walletId, amount, userId, userEmail, userPhone });
-    
+    // We don't need walletId from params anymore, we find it by user
+    const { amount, userEmail, userPhone } = req.body;
+    const userId = req.user.userId;
+
+    console.log('Add money request:', { amount, userId, userEmail, userPhone });
+
     // Validate required fields
     if (!amount || amount < 1 || amount > 50000) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Amount must be between ₹1 and ₹50,000' 
+      return res.status(400).json({
+        success: false,
+        error: 'Amount must be between ₹1 and ₹50,000'
       });
     }
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User ID is required' 
-      });
-    }
-    
+
     if (!userEmail) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User email is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'User email is required'
       });
     }
-    
+
     // Get wallet
-    const wallet = await Wallet.findById(walletId);
+    const wallet = await Wallet.findOne({ userId, status: 'active' });
     if (!wallet) {
       return res.status(404).json({ success: false, error: 'Wallet not found' });
     }
-    
-    // Verify user owns this wallet
+
+    // Verify user owns this wallet (redundant since we queried by userId, but good practice)
     if (wallet.userId.toString() !== userId) {
       return res.status(403).json({ success: false, error: 'Not authorized to access this wallet' });
     }
-    
+
     // Generate unique order ID
     const orderId = `WALLET_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Create pending transaction
     wallet.transactions.push({
       type: 'credit',
@@ -155,9 +168,9 @@ const initiateAddMoney = async (req, res) => {
         paymentType: 'wallet_recharge'
       }
     });
-    
+
     await wallet.save();
-    
+
     // Prepare Cashfree payment request
     const paymentData = {
       order_id: orderId,
@@ -172,15 +185,15 @@ const initiateAddMoney = async (req, res) => {
         return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wallet?order_id=${orderId}`
       }
     };
-    
-  // For development/testing - bypass Cashfree and simulate success
-  // NOTE: signature generation depends on a configured CASHFREE secret key.
-  // Generate the signature only when performing real Cashfree requests to avoid
-  // runtime errors in development/test mode when the secret key is missing.
-  if (true) { // Always skip payment for testing
+
+    // For development/testing - bypass Cashfree and simulate success
+    // NOTE: signature generation depends on a configured CASHFREE secret key.
+    // Generate the signature only when performing real Cashfree requests to avoid
+    // runtime errors in development/test mode when the secret key is missing.
+    if (true) { // Always skip payment for testing
       // Simulate successful payment for testing - don't open real payment URL
       const paymentUrl = `http://localhost:3000/wallet?test_payment=true&order_id=${orderId}&amount=${amount}`;
-      
+
       res.json({
         success: true,
         message: 'Payment initiated successfully (TEST MODE)',
@@ -211,13 +224,13 @@ const initiateAddMoney = async (req, res) => {
       },
       body: JSON.stringify(paymentData)
     });
-    
+
     const cashfreeData = await cashfreeResponse.json();
-    
+
     if (cashfreeData.payment_session_id) {
       // Generate payment URL
       const paymentUrl = `${CASHFREE_CONFIG.apiUrl}/order/${orderId}/pay?payment_session_id=${cashfreeData.payment_session_id}`;
-      
+
       res.json({
         success: true,
         message: 'Payment initiated successfully',
@@ -236,14 +249,14 @@ const initiateAddMoney = async (req, res) => {
         transaction.status = 'failed';
         await wallet.save();
       }
-      
+
       res.status(400).json({
         success: false,
         error: 'Failed to initiate payment',
         details: cashfreeData
       });
     }
-    
+
   } catch (error) {
     console.error('Error in initiateAddMoney:', error);
     // In development include the actual error message to aid debugging.
@@ -257,32 +270,32 @@ const handleCashfreeWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-webhook-signature'];
     const payload = JSON.stringify(req.body);
-    
+
     // Verify webhook signature
     const expectedSignature = crypto
       .createHmac('sha256', CASHFREE_CONFIG.webhookSecret)
       .update(payload)
       .digest('hex');
-    
+
     if (signature !== expectedSignature) {
       console.error('Invalid webhook signature');
       return res.status(401).json({ success: false, error: 'Invalid signature' });
     }
-    
+
     const { order_id, order_amount, order_status, payment_mode } = req.body;
-    
+
     console.log('Cashfree webhook received:', { order_id, order_amount, order_status });
-    
+
     // Find wallet with this transaction
     const wallet = await Wallet.findOne({
       'transactions.referenceId': order_id
     });
-    
+
     if (!wallet) {
       console.error('Wallet not found for order:', order_id);
       return res.status(404).json({ success: false, error: 'Wallet not found' });
     }
-    
+
     // Update transaction status
     const transaction = wallet.transactions.find(t => t.referenceId === order_id);
     if (transaction) {
@@ -295,13 +308,13 @@ const handleCashfreeWebhook = async (req, res) => {
       } else if (order_status === 'FAILED') {
         transaction.status = 'failed';
       }
-      
+
       await wallet.save();
       console.log('Wallet updated for order:', order_id);
     }
-    
+
     res.json({ success: true, message: 'Webhook processed successfully' });
-    
+
   } catch (error) {
     console.error('Error in handleCashfreeWebhook:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -312,21 +325,21 @@ const handleCashfreeWebhook = async (req, res) => {
 const checkPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    
+
     // Find wallet with this transaction
     const wallet = await Wallet.findOne({
       'transactions.referenceId': orderId
     });
-    
+
     if (!wallet) {
       return res.status(404).json({ success: false, error: 'Transaction not found' });
     }
-    
+
     const transaction = wallet.transactions.find(t => t.referenceId === orderId);
     if (!transaction) {
       return res.status(404).json({ success: false, error: 'Transaction not found' });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -336,7 +349,7 @@ const checkPaymentStatus = async (req, res) => {
         createdAt: transaction.createdAt
       }
     });
-    
+
   } catch (error) {
     console.error('Error in checkPaymentStatus:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -348,26 +361,26 @@ const deductMatchEntryFee = async (req, res) => {
   try {
     const { walletId } = req.params;
     const { amount, matchId, matchName } = req.body;
-    
+
     // Get wallet
     const wallet = await Wallet.findById(walletId);
     if (!wallet) {
       return res.status(404).json({ success: false, error: 'Wallet not found' });
     }
-    
+
     // Check if user can afford the entry fee
     if (!wallet.canAfford(amount)) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         error: 'Insufficient balance',
         required: amount,
         available: wallet.balance
       });
     }
-    
+
     // Deduct money
     await wallet.deductMoney(amount, `Match entry fee - ${matchName}`, `MATCH_${matchId}_${Date.now()}`);
-    
+
     res.json({
       success: true,
       message: 'Entry fee deducted successfully',
@@ -377,7 +390,7 @@ const deductMatchEntryFee = async (req, res) => {
         matchId: matchId
       }
     });
-    
+
   } catch (error) {
     console.error('Error in deductMatchEntryFee:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -388,13 +401,13 @@ const deductMatchEntryFee = async (req, res) => {
 const getWalletBalance = async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     const wallet = await Wallet.findOne({ userId, status: 'active' });
-    
+
     if (!wallet) {
       return res.json({ success: true, data: { balance: 0, canCreateWallet: true } });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -403,7 +416,7 @@ const getWalletBalance = async (req, res) => {
         walletId: wallet._id
       }
     });
-    
+
   } catch (error) {
     console.error('Error in getWalletBalance:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -420,6 +433,7 @@ const generateCashfreeSignature = (payload, secretKey) => {
 };
 
 module.exports = {
+  getMyWallet,
   getUserWallet,
   createWallet,
   getWalletTransactions,

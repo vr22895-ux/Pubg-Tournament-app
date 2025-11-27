@@ -1,7 +1,29 @@
 const Squad = require('../schema/Squad');
 const User = require('../schema/User');
 
-// Get user's squad
+// Get user's squad (Secure)
+const getMySquad = async (req, res) => {
+  try {
+    // Use userId from the authenticated token
+    const userId = req.user.userId;
+
+    const squad = await Squad.findOne({
+      'members.userId': userId,
+      status: 'active'
+    }).populate('members.userId', 'name pubgId email');
+
+    if (!squad) {
+      return res.json({ success: false, message: 'User not in squad' });
+    }
+
+    res.json({ success: true, data: squad });
+  } catch (error) {
+    console.error('Error in getMySquad:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+// Get user's squad (Legacy/Admin - keep for admin usage if needed, or deprecate)
 const getUserSquad = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -9,11 +31,11 @@ const getUserSquad = async (req, res) => {
       'members.userId': userId,
       status: 'active'
     }).populate('members.userId', 'name pubgId email');
-    
+
     if (!squad) {
       return res.json({ success: false, message: 'User not in squad' });
     }
-    
+
     res.json({ success: true, data: squad });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
@@ -28,7 +50,7 @@ const getAllSquads = async (req, res) => {
 
     // Build search query
     let query = {};
-    
+
     if (status && status !== 'all') {
       query.status = status;
     }
@@ -74,15 +96,15 @@ const getAllSquads = async (req, res) => {
 const getSquadById = async (req, res) => {
   try {
     const { squadId } = req.params;
-    
+
     const squad = await Squad.findById(squadId)
       .populate('leader', 'name email')
       .populate('members.userId', 'name email');
-    
+
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     res.json({ success: true, data: squad });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
@@ -92,20 +114,22 @@ const getSquadById = async (req, res) => {
 // Create new squad
 const createSquad = async (req, res) => {
   try {
-    const { name, leaderId, leaderName, leaderPubgId } = req.body;
-    
+    const { name, leaderName, leaderPubgId } = req.body;
+    // Secure: Get leaderId from token
+    const leaderId = req.user.userId;
+
     const existingSquad = await Squad.findOne({
       'members.userId': leaderId,
       status: 'active'
     });
-    
+
     if (existingSquad) {
       return res.status(400).json({
         success: false,
         error: 'User already in squad'
       });
     }
-    
+
     const squad = new Squad({
       name,
       leader: leaderId,
@@ -117,20 +141,20 @@ const createSquad = async (req, res) => {
         status: 'active'
       }]
     });
-    
+
     await squad.save();
-    
+
     // Update user's squad reference
     await User.findByIdAndUpdate(leaderId, {
       squadId: squad._id,
       squadRole: 'leader'
     });
-    
+
     // Populate the squad data before returning
     const populatedSquad = await Squad.findById(squad._id)
       .populate('leader', 'name email')
       .populate('members.userId', 'name pubgId email');
-    
+
     res.json({ success: true, data: populatedSquad });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
@@ -142,23 +166,23 @@ const updateSquad = async (req, res) => {
   try {
     const { squadId } = req.params;
     const { name, maxMembers, status } = req.body;
-    
+
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     const updateData = {};
     if (name) updateData.name = name;
     if (maxMembers) updateData.maxMembers = maxMembers;
     if (status) updateData.status = status;
-    
+
     const updatedSquad = await Squad.findByIdAndUpdate(
       squadId,
       updateData,
       { new: true, runValidators: true }
     ).populate('leader', 'name email').populate('members.userId', 'name email');
-    
+
     res.json({ success: true, data: updatedSquad });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
@@ -169,34 +193,34 @@ const updateSquad = async (req, res) => {
 const inviteToSquad = async (req, res) => {
   try {
     const { squadId, invitedUserId } = req.body;
-    
+
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     console.log(`Debug: Squad ${squad.name} has ${squad.members.length} members`);
-    
+
     if (squad.members.length >= squad.maxMembers) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Squad is full (${squad.members.length}/${squad.maxMembers} members)` 
+      return res.status(400).json({
+        success: false,
+        error: `Squad is full (${squad.members.length}/${squad.maxMembers} members)`
       });
     }
-    
+
     const invitedUser = await User.findById(invitedUserId);
     if (!invitedUser) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
+
     // Check if user is already in a squad
     if (invitedUser.squadId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User is already in a squad' 
+      return res.status(400).json({
+        success: false,
+        error: 'User is already in a squad'
       });
     }
-    
+
     // Check if invitation already exists
     const Invitation = require('../schema/Invitation');
     const existingInvitation = await Invitation.findOne({
@@ -204,22 +228,22 @@ const inviteToSquad = async (req, res) => {
       invitedUserId,
       status: 'pending'
     });
-    
+
     if (existingInvitation) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invitation already sent to this user' 
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation already sent to this user'
       });
     }
-    
-    // Get inviter's info (assuming req.user exists from auth middleware)
-    const inviterId = req.user?.userId || req.body.inviterId;
+
+    // Get inviter's info from token
+    const inviterId = req.user.userId;
     const inviter = await User.findById(inviterId);
-    
+
     if (!inviter) {
       return res.status(400).json({ success: false, error: 'Inviter not found' });
     }
-    
+
     // Create invitation
     const invitation = new Invitation({
       squadId,
@@ -229,15 +253,15 @@ const inviteToSquad = async (req, res) => {
       invitedByPubgId: inviter.pubgId,
       message: req.body.message || ''
     });
-    
+
     await invitation.save();
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Invitation sent successfully',
       data: invitation
     });
-    
+
   } catch (error) {
     console.error('Error in inviteToSquad:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -248,43 +272,45 @@ const inviteToSquad = async (req, res) => {
 const requestToJoinSquad = async (req, res) => {
   try {
     const { squadId } = req.params;
-    const { userId, userName, userPubgId } = req.body;
-    
+    const { userName, userPubgId } = req.body;
+    // Secure: Get userId from token
+    const userId = req.user.userId;
+
     // Find the squad
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     // Check if squad is active
     if (squad.status !== 'active') {
       return res.status(400).json({ success: false, error: 'Squad is not active' });
     }
-    
+
     // Check if squad is full
     if (squad.members.length >= squad.maxMembers) {
       return res.status(400).json({ success: false, error: 'Squad is full' });
     }
-    
+
     // Check if user is already in a squad
     const existingSquad = await Squad.findOne({
       'members.userId': userId,
       status: 'active'
     });
-    
+
     if (existingSquad) {
       return res.status(400).json({ success: false, error: 'You are already in a squad' });
     }
-    
+
     // Check if user is already a member of this squad
-    const isAlreadyMember = squad.members.some(member => 
+    const isAlreadyMember = squad.members.some(member =>
       member.userId.toString() === userId
     );
-    
+
     if (isAlreadyMember) {
       return res.status(400).json({ success: false, error: 'You are already a member of this squad' });
     }
-    
+
     // Check if there's already a pending invitation
     const Invitation = require('../schema/Invitation');
     const existingInvitation = await Invitation.findOne({
@@ -292,14 +318,14 @@ const requestToJoinSquad = async (req, res) => {
       invitedUserId: userId,
       status: 'pending'
     });
-    
+
     if (existingInvitation) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'You already have a pending invitation to this squad' 
+      return res.status(400).json({
+        success: false,
+        error: 'You already have a pending invitation to this squad'
       });
     }
-    
+
     // Create join request invitation
     const invitation = new Invitation({
       squadId,
@@ -310,15 +336,15 @@ const requestToJoinSquad = async (req, res) => {
       message: `${userName} wants to join your squad!`,
       type: 'join_request'
     });
-    
+
     await invitation.save();
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Join request sent successfully. The squad leader will review your request.',
       data: invitation
     });
-    
+
   } catch (error) {
     console.error('Error in requestToJoinSquad:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -330,52 +356,52 @@ const removeFromSquad = async (req, res) => {
   try {
     const { squadId, userId } = req.params;
     const { userId: currentUserId } = req.user; // Current user making the request
-    
+
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     // Check if current user is the squad leader
     if (squad.leader.toString() !== currentUserId) {
       return res.status(403).json({ success: false, error: 'Only squad leader can remove members' });
     }
-    
+
     // Check if trying to remove the leader
     if (squad.leader.toString() === userId) {
       return res.status(400).json({ success: false, error: 'Cannot remove squad leader' });
     }
-    
+
     // Check if user is actually a member of the squad
-    const memberExists = squad.members.some(member => 
+    const memberExists = squad.members.some(member =>
       member.userId.toString() === userId
     );
-    
+
     if (!memberExists) {
       return res.status(400).json({ success: false, error: 'User is not a member of this squad' });
     }
-    
+
     // Remove user from squad
-    squad.members = squad.members.filter(member => 
+    squad.members = squad.members.filter(member =>
       member.userId.toString() !== userId
     );
-    
+
     if (squad.members.length < 2) {
       squad.status = 'inactive';
     }
-    
+
     await squad.save();
-    
+
     // Update user's squad reference
     await User.findByIdAndUpdate(userId, {
       $unset: { squadId: 1, squadRole: 1 }
     });
-    
+
     // Populate the squad data before returning
     const populatedSquad = await Squad.findById(squad._id)
       .populate('leader', 'name email')
       .populate('members.userId', 'name pubgId email');
-    
+
     res.json({ success: true, data: populatedSquad });
   } catch (error) {
     console.error('Error in removeFromSquad:', error);
@@ -387,56 +413,57 @@ const removeFromSquad = async (req, res) => {
 const leaveSquad = async (req, res) => {
   try {
     const { squadId } = req.params;
-    const { userId } = req.body; // User ID of the person leaving
-    
+    // Secure: Get userId from token
+    const userId = req.user.userId;
+
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     // Check if user is in the squad
-    const memberIndex = squad.members.findIndex(member => 
+    const memberIndex = squad.members.findIndex(member =>
       member.userId.toString() === userId
     );
-    
+
     if (memberIndex === -1) {
       return res.status(400).json({ success: false, error: 'User is not a member of this squad' });
     }
-    
+
     // If user is the leader, they can't leave - they must delete the squad
     if (squad.leader.toString() === userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Squad leader cannot leave. Please delete the squad instead.' 
+      return res.status(400).json({
+        success: false,
+        error: 'Squad leader cannot leave. Please delete the squad instead.'
       });
     }
-    
+
     // Remove user from squad
     squad.members.splice(memberIndex, 1);
-    
+
     // If squad becomes too small, mark as inactive
     if (squad.members.length < 2) {
       squad.status = 'inactive';
     }
-    
+
     await squad.save();
-    
+
     // Update user's squad reference
     await User.findByIdAndUpdate(userId, {
       $unset: { squadId: 1, squadRole: 1 }
     });
-    
+
     // Populate the squad data before returning
     const populatedSquad = await Squad.findById(squad._id)
       .populate('leader', 'name email')
       .populate('members.userId', 'name pubgId email');
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Successfully left squad',
-      data: populatedSquad 
+      data: populatedSquad
     });
-    
+
   } catch (error) {
     console.error('Error in leaveSquad:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -447,21 +474,21 @@ const leaveSquad = async (req, res) => {
 const deleteSquad = async (req, res) => {
   try {
     const { squadId } = req.params;
-    
+
     const squad = await Squad.findById(squadId);
     if (!squad) {
       return res.status(404).json({ success: false, error: 'Squad not found' });
     }
-    
+
     // Remove squad references from all members
     const memberIds = squad.members.map(member => member.userId);
     await User.updateMany(
       { _id: { $in: memberIds } },
       { $unset: { squadId: 1, squadRole: 1 } }
     );
-    
+
     await Squad.findByIdAndDelete(squadId);
-    
+
     res.json({ success: true, message: 'Squad deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Server error' });
@@ -469,6 +496,7 @@ const deleteSquad = async (req, res) => {
 };
 
 module.exports = {
+  getMySquad,
   getUserSquad,
   getAllSquads,
   getSquadById,

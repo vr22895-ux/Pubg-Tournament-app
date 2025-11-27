@@ -21,9 +21,9 @@ app.use(cors({ origin: true, credentials: false }));
 app.use(express.json());
 
 // (optional) tiny logger
-app.use((req, _res, next) => { 
-  console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`); 
-  next(); 
+app.use((req, _res, next) => {
+  console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`);
+  next();
 });
 
 // health
@@ -32,7 +32,7 @@ app.use("/api/otp", require("./controller/loginController"));
 
 
 // ✅ Auth (user registration/login) — using controller directly
-app.get('/api/auth/find', authController.findByPhone);   
+app.get('/api/auth/find', authController.findByPhone);
 app.get('/api/auth/find-user', authController.findByEmailOrPubgId);
 app.get('/api/auth/players', authController.getAvailablePlayers);
 app.post('/api/auth/register', authController.register);  // { phone, pubgId, email }
@@ -56,13 +56,14 @@ app.post('/api/admin/users/:userId/ban', adminAuth, userController.banUser);
 app.post('/api/admin/users/:userId/unban', adminAuth, userController.unbanUser);
 
 // Squad routes
+app.get('/api/squads/my-squad', userAuth, squadController.getMySquad); // Secure route first
 app.get('/api/squads/user/:userId', squadController.getUserSquad);
 app.get('/api/squads', squadController.getAllSquads);
 app.get('/api/squads/:squadId', squadController.getSquadById);
-app.post('/api/squads', squadController.createSquad);
+app.post('/api/squads', userAuth, squadController.createSquad);
 app.put('/api/squads/:squadId', squadController.updateSquad);
-app.post('/api/squads/:squadId/invite', squadController.inviteToSquad);
-app.post('/api/squads/:squadId/join-request', squadController.requestToJoinSquad);
+app.post('/api/squads/:squadId/invite', userAuth, squadController.inviteToSquad);
+app.post('/api/squads/:squadId/join-request', userAuth, squadController.requestToJoinSquad);
 app.post('/api/squads/:squadId/leave', userAuth, squadController.leaveSquad);
 app.delete('/api/squads/:squadId/members/:userId', userAuth, squadController.removeFromSquad);
 app.delete('/api/squads/:squadId', squadController.deleteSquad);
@@ -77,11 +78,13 @@ app.post('/api/invitations/:invitationId/decline-join', userAuth, invitationCont
 app.delete('/api/invitations/:invitationId', userAuth, invitationController.cancelInvitation);
 
 // Wallet routes
+app.get('/api/wallet/my-wallet', userAuth, walletController.getMyWallet); // Secure route first
 app.get('/api/wallet/user/:userId', walletController.getUserWallet);
 app.get('/api/wallet/balance/:userId', walletController.getWalletBalance);
-app.post('/api/wallet', walletController.createWallet);
+app.post('/api/wallet', userAuth, walletController.createWallet);
 app.get('/api/wallet/:walletId/transactions', walletController.getWalletTransactions);
-app.post('/api/wallet/:walletId/add-money', walletController.initiateAddMoney);
+app.post('/api/wallet/add-money', userAuth, walletController.initiateAddMoney); // Generic secure route
+app.post('/api/wallet/:walletId/add-money', walletController.initiateAddMoney); // Keep legacy for now if needed, or remove
 app.post('/api/wallet/:walletId/deduct-entry-fee', walletController.deductMatchEntryFee);
 app.get('/api/wallet/payment-status/:orderId', walletController.checkPaymentStatus);
 app.post('/api/wallet/webhook/cashfree', walletController.handleCashfreeWebhook);
@@ -136,7 +139,7 @@ console.log('- POST /api/auth/admin/login');
 console.log('- POST /api/auth/admin/create');
 
 // db
-mongoose.connect(process.env.MONGODB_URI, { })
+mongoose.connect(process.env.MONGODB_URI, {})
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
