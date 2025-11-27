@@ -1,13 +1,37 @@
-/**
- * Simple admin authentication middleware
- * In production, you should implement proper JWT token validation
- */
-const adminAuth = (req, res, next) => {
-  // For now, we'll skip admin validation since the routes are already protected
-  // by the frontend admin panel access
-  // In production, implement proper admin token validation here
-  
-  next();
+const jwt = require('jsonwebtoken');
+const User = require('../schema/User');
+
+const adminAuth = async (req, res, next) => {
+  try {
+    //1. Get the token from the request header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({success: false, error: 'Access denied. No token provided.'});
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    //2. Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    //3. Check User and Role
+    const user = await User.findById(decoded.userId);
+    if(!user) {
+      return res.status(401).json({success: false, error: 'User not found.'});
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(403).json({success: false, error: 'Access denied. Admins only.'});
+    }
+
+    //4. Attach user to the request
+    req.user = { userId: user._id.toString(), user };
+    next();
+
+  } catch (error) {
+    console.error('Admin Auth Error:', error.message);
+    return res.status(401).json({success: false, error: 'Invalid token.'});
+  }
 };
 
 module.exports = adminAuth;

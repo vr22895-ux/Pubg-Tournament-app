@@ -64,7 +64,11 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       
       console.log('Loading wallet for user:', currentUser._id);
       
-      const response = await axios.get(`${API_BASE}/wallet/user/${currentUser._id}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/wallet/my-wallet`, {
+        headers: {Authorization: `Bearer ${token}` }
+      });
+
       console.log('Wallet response:', response.data);
       
       if (response.data.success) {
@@ -88,12 +92,15 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
       
+      const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/wallet`, {
-        userId: currentUser._id,
+        // userId is REMOVED. Server gets it from token.
         userName: currentUser.name,
         userEmail: currentUser.email
+      }, {
+        headers: {Authorization: `Bearer ${token}` }
       });
-      
+
       if (response.data.success) {
         setWallet(response.data.data);
       }
@@ -129,11 +136,12 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
 
-      const response = await axios.post(`${API_BASE}/wallet/${wallet._id}/add-money`, {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_BASE}/wallet/add-money`, {
         amount: parseFloat(amount),
-        userId: currentUser._id,
-        userEmail: currentUser.email,
-        userPhone: currentUser.phone
+        // userId removed
+      }, {
+        headers: {Authorization: `Bearer ${token}` }
       });
 
       if (response.data.success) {

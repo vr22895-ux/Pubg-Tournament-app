@@ -141,4 +141,18 @@ mongoose.connect(process.env.MONGODB_URI, { })
   .catch(err => console.error('MongoDB connection error:', err));
 
 const PORT = process.env.PORT || 5050;
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.log('🔥 Global Error:', err.stack);
+
+  const statusCode = err.statusCode || 500; // Default to 500 if no status code
+  const message = err.message || 'Internal Server Error';
+
+  res.status(statusCode).json({
+    success: false,
+    error: message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
 app.listen(PORT, () => console.log(`API running at http://localhost:${PORT}`));

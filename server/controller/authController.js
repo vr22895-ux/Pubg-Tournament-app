@@ -1,7 +1,7 @@
 const User = require('../schema/User');
 const bcrypt = require('bcryptjs');
 const axios = require('axios'); // Added axios for OTP verification
-
+const jwt = require('jsonwebtoken');
 /**
  * GET /api/auth/find?phone=XXXXXXXXXX
  * If a user exists with that phone, return it. Used after OTP verify to decide whether to register or login.
@@ -262,10 +262,18 @@ exports.login = async (req, res) => {
       $set: { lastLoginAt: new Date() } 
     });
 
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, role: user.role }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
     // Remove password from response
     const { password: _, ...userResponse } = user;
 
-    return res.json({ success: true, user: userResponse });
+    // Return token + user
+    return res.json({ success: true, token, user: userResponse });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'failed' });
   }
