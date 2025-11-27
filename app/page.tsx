@@ -77,15 +77,20 @@ export default function PUBGTournamentApp() {
         }
         // Load pending invitations count
         loadPendingInvitationsCount()
+
+        // Restore user role
+        if (user.role) {
+          setUserRole(user.role)
+        }
       }
-    } catch {}
+    } catch { }
   }, [])
 
-    const handleLogout = () => {
-      try { localStorage.removeItem("user") } catch {}
-      setIsLoggedIn(false)
-      setCurrentScreen("login")
-    }
+  const handleLogout = () => {
+    try { localStorage.removeItem("user") } catch { }
+    setIsLoggedIn(false)
+    setCurrentScreen("login")
+  }
 
   // Load pending invitations count
   const loadPendingInvitationsCount = async () => {
@@ -93,7 +98,7 @@ export default function PUBGTournamentApp() {
       const raw = localStorage.getItem("user")
       if (raw) {
         const user = JSON.parse(raw)
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001/api'}/invitations/user/${user._id}`)
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5050/api'}/invitations/user/${user._id}`)
         if (response.data?.success) {
           setPendingInvitationsCount(response.data.data.length)
         }
@@ -108,27 +113,27 @@ export default function PUBGTournamentApp() {
 
   const MyMatchesScreen = () => (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
-                <div className="text-center">
+      <div className="text-center">
         <h1 className="text-2xl font-bold text-green-400 mb-4">My Matches</h1>
         <p className="text-gray-400">Match history coming soon...</p>
         <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
           Logout
-              </Button>
+        </Button>
       </div>
-      </div>
-    )
+    </div>
+  )
 
   const LiveScreen = () => (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
-                      <div className="text-center">
+      <div className="text-center">
         <h1 className="text-2xl font-bold text-green-400 mb-4">Live Matches</h1>
         <p className="text-gray-400">Live streaming coming soon...</p>
         <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
           Logout
-                      </Button>
+        </Button>
       </div>
-      </div>
-    )
+    </div>
+  )
 
   const SettingsScreen = () => (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -136,8 +141,8 @@ export default function PUBGTournamentApp() {
         <h1 className="text-2xl font-bold text-green-400 mb-4">Settings</h1>
         <p className="text-gray-400">Settings panel coming soon...</p>
         <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
-                  Logout
-                </Button>
+          Logout
+        </Button>
       </div>
     </div>
   )
@@ -157,7 +162,7 @@ export default function PUBGTournamentApp() {
     return <AdminPanel onSwitchToUser={() => setUserRole("user")} />
   }
 
- 
+
 
   switch (currentScreen) {
     case "home":

@@ -12,7 +12,7 @@ exports.findByPhone = async (req, res) => {
     if (!digits) return res.status(400).json({ success: false, error: 'phone is required' });
 
     const user = await User.findOne({ phone: digits, role: 'user' }).lean();
-    
+
     if (user && user.status !== 'active') {
       let statusMessage = '';
       if (user.status === 'suspended') {
@@ -30,15 +30,15 @@ exports.findByPhone = async (req, res) => {
       } else {
         statusMessage = `Account is ${user.status}. Please contact support.`;
       }
-      
-      return res.json({ 
-        success: false, 
+
+      return res.json({
+        success: false,
         error: statusMessage,
         status: user.status,
         user: null
       });
     }
-    
+
     return res.json({ success: true, user: user || null });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'failed' });
@@ -52,34 +52,34 @@ exports.findByPhone = async (req, res) => {
 exports.findByEmailOrPubgId = async (req, res) => {
   try {
     const { email, pubgId } = req.query;
-    
+
     if (!email && !pubgId) {
       return res.status(400).json({ success: false, error: 'email or pubgId is required' });
     }
-    
+
     let query = { role: 'user' };
     if (email) {
       query.email = String(email).trim().toLowerCase();
     } else if (pubgId) {
       query.pubgId = String(pubgId).trim();
     }
-    
+
     const user = await User.findOne(query).lean();
-    
+
     if (!user) {
       return res.json({ success: false, error: 'User not found' });
     }
-    
+
     if (user.status !== 'active') {
-      return res.json({ 
-        success: false, 
-        error: `User account is ${user.status}` 
+      return res.json({
+        success: false,
+        error: `User account is ${user.status}`
       });
     }
-    
+
     // Remove sensitive fields
     const { password, ...userResponse } = user;
-    
+
     return res.json({ success: true, data: userResponse });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'failed' });
@@ -94,10 +94,10 @@ exports.getAvailablePlayers = async (req, res) => {
   try {
     const { search = '', page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     // Build search query
-    let query = { 
-      role: 'user', 
+    let query = {
+      role: 'user',
       status: 'active',
       // Only show players who are not in a squad
       $or: [
@@ -105,7 +105,7 @@ exports.getAvailablePlayers = async (req, res) => {
         { squadId: null }
       ]
     };
-    
+
     if (search.trim()) {
       const searchRegex = new RegExp(search.trim(), 'i');
       query.$and = [
@@ -118,7 +118,7 @@ exports.getAvailablePlayers = async (req, res) => {
         }
       ];
     }
-    
+
     // Get players with pagination
     const players = await User.find(query)
       .select('name pubgId email')
@@ -126,10 +126,10 @@ exports.getAvailablePlayers = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
-    
+
     // Get total count for pagination
     const total = await User.countDocuments(query);
-    
+
     res.json({
       success: true,
       data: players,
@@ -140,7 +140,7 @@ exports.getAvailablePlayers = async (req, res) => {
         pages: Math.ceil(total / parseInt(limit))
       }
     });
-    
+
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'failed' });
   }
@@ -203,26 +203,26 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    
+
     if (!email) return res.status(400).json({ success: false, error: 'email is required' });
     if (!password) return res.status(400).json({ success: false, error: 'password is required' });
 
-    const user = await User.findOne({ 
-      email: String(email).trim().toLowerCase(), 
-      role: 'user' 
+    const user = await User.findOne({
+      email: String(email).trim().toLowerCase(),
+      role: 'user'
     }).lean();
 
     if (!user) return res.status(404).json({ success: false, error: 'User not found. Please register.' });
-    
+
     // Check user status - prevent login for suspended or banned users
     if (user.status === 'suspended') {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: 'Account suspended. Please contact support for assistance.',
         status: 'suspended'
       });
     }
-    
+
     if (user.status === 'banned') {
       let banMessage = 'Account banned.';
       if (user.banReason) {
@@ -233,19 +233,19 @@ exports.login = async (req, res) => {
       } else if (user.banExpiry) {
         banMessage += ' This is a permanent ban.';
       }
-      
-      return res.status(403).json({ 
-        success: false, 
+
+      return res.status(403).json({
+        success: false,
         error: banMessage,
         status: 'banned',
         banReason: user.banReason,
         banExpiry: user.banExpiry
       });
     }
-    
+
     if (user.status !== 'active') {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: `Account is ${user.status}. Please contact support.`,
         status: user.status
       });
@@ -258,14 +258,14 @@ exports.login = async (req, res) => {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { 
-      $set: { lastLoginAt: new Date() } 
+    await User.findByIdAndUpdate(user._id, {
+      $set: { lastLoginAt: new Date() }
     });
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, role: user.role }, 
-      process.env.JWT_SECRET, 
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
@@ -288,13 +288,13 @@ exports.login = async (req, res) => {
 exports.adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    
+
     if (!email) return res.status(400).json({ success: false, error: 'Admin email is required' });
     if (!password) return res.status(400).json({ success: false, error: 'Admin password is required' });
 
-    const admin = await User.findOne({ 
-      adminEmail: String(email).trim().toLowerCase(), 
-      role: 'admin' 
+    const admin = await User.findOne({
+      adminEmail: String(email).trim().toLowerCase(),
+      role: 'admin'
     }).lean();
 
     if (!admin) {
@@ -302,13 +302,13 @@ exports.adminLogin = async (req, res) => {
     }
 
     if (admin.status === 'suspended') {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: 'Admin account suspended. Please contact system administrator.',
         status: 'suspended'
       });
     }
-    
+
     if (admin.status === 'banned') {
       let banMessage = 'Admin account banned.';
       if (admin.banReason) {
@@ -319,19 +319,19 @@ exports.adminLogin = async (req, res) => {
       } else if (admin.banExpiry) {
         banMessage += ' This is a permanent ban.';
       }
-      
-      return res.status(403).json({ 
-        success: false, 
+
+      return res.status(403).json({
+        success: false,
         error: banMessage,
         status: 'banned',
         banReason: admin.banReason,
         banExpiry: admin.banExpiry
       });
     }
-    
+
     if (admin.status !== 'active') {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: `Admin account is ${admin.status}. Please contact system administrator.`,
         status: admin.status
       });
@@ -344,14 +344,21 @@ exports.adminLogin = async (req, res) => {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(admin._id, { 
-      $set: { lastLoginAt: new Date() } 
+    await User.findByIdAndUpdate(admin._id, {
+      $set: { lastLoginAt: new Date() }
     });
 
     // Remove password from response
     const { adminPassword, ...adminUser } = admin;
 
-    return res.json({ success: true, user: adminUser });
+    // Generate JWT token for admin
+    const token = jwt.sign(
+      { userId: admin._id, role: admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    return res.json({ success: true, token, user: adminUser });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'failed' });
   }
@@ -366,7 +373,7 @@ exports.adminLogin = async (req, res) => {
 exports.createAdmin = async (req, res) => {
   try {
     const { email, password, name } = req.body || {};
-    
+
     if (!email) return res.status(400).json({ success: false, error: 'Admin email is required' });
     if (!password) return res.status(400).json({ success: false, error: 'Admin password is required' });
     if (!name) return res.status(400).json({ success: false, error: 'Admin name is required' });
@@ -408,13 +415,13 @@ exports.createAdmin = async (req, res) => {
 exports.checkLoginEligibility = async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     if (!userId) {
       return res.status(400).json({ success: false, error: 'User ID is required' });
     }
 
     const user = await User.findById(userId).select('-password -adminPassword').lean();
-    
+
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
@@ -436,11 +443,11 @@ exports.checkLoginEligibility = async (req, res) => {
       } else if (user.banExpiry) {
         message += ' This is a permanent ban.';
       }
-      details = { 
-        status: 'banned', 
-        reason: user.banReason, 
+      details = {
+        status: 'banned',
+        reason: user.banReason,
         expiry: user.banExpiry,
-        adminNotes: user.adminNotes 
+        adminNotes: user.adminNotes
       };
     } else if (user.status === 'active') {
       message = 'Account is active and can login.';
@@ -477,30 +484,30 @@ exports.checkLoginEligibility = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { userId, name, email } = req.body || {};
-    
+
     if (!userId) return res.status(400).json({ success: false, error: 'User ID is required' });
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' });
     if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
 
     // Check if email is already taken by another user
-    const existingUser = await User.findOne({ 
-      email: String(email).trim().toLowerCase(), 
+    const existingUser = await User.findOne({
+      email: String(email).trim().toLowerCase(),
       _id: { $ne: userId },
       role: 'user'
     });
-    
+
     if (existingUser) {
       return res.status(409).json({ success: false, error: 'Email is already taken by another user' });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { 
-        $set: { 
+      {
+        $set: {
           name: String(name).trim(),
           email: String(email).trim().toLowerCase(),
           updatedAt: new Date()
-        } 
+        }
       },
       { new: true, runValidators: true }
     ).lean();
@@ -527,7 +534,7 @@ exports.updateProfile = async (req, res) => {
 exports.verifyPhoneNumber = async (req, res) => {
   try {
     const { userId, phone, verificationId, otp } = req.body || {};
-    
+
     if (!userId) return res.status(400).json({ success: false, error: 'User ID is required' });
     if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required' });
     if (!verificationId) return res.status(400).json({ success: false, error: 'Verification ID is required' });
@@ -538,7 +545,7 @@ exports.verifyPhoneNumber = async (req, res) => {
       const otpResponse = await axios.get(`${process.env.OTP_API_URL || 'http://localhost:5050'}/api/otp/verify`, {
         params: { verificationId, code: otp.replace(/\D/g, "") },
       });
-      
+
       if (!otpResponse.data?.success) {
         return res.status(400).json({ success: false, error: 'Invalid OTP' });
       }
@@ -549,11 +556,11 @@ exports.verifyPhoneNumber = async (req, res) => {
     // Update phone number
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { 
-        $set: { 
+      {
+        $set: {
           phone: String(phone).replace(/\D/g, ''),
           updatedAt: new Date()
-        } 
+        }
       },
       { new: true, runValidators: true }
     ).lean();

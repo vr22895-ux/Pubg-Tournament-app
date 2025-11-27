@@ -8,15 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Wallet, 
-  Plus, 
-  History, 
-  LogOut, 
-  Home, 
-  Users, 
-  Gamepad2, 
-  Trophy, 
+import {
+  Wallet,
+  Plus,
+  History,
+  LogOut,
+  Home,
+  Users,
+  Gamepad2,
+  Trophy,
   CreditCard,
   CheckCircle,
   XCircle,
@@ -27,9 +27,9 @@ import {
 
 const API_BASE = "http://localhost:5050/api";
 
-export default function WalletScreen({ onLogout, onNavigate }: { 
-  onLogout: () => void; 
-  onNavigate?: (screen: "home" | "squad" | "wallet" | "matches" | "leaderboard" | "live" | "settings") => void 
+export default function WalletScreen({ onLogout, onNavigate }: {
+  onLogout: () => void;
+  onNavigate?: (screen: "home" | "squad" | "wallet" | "matches" | "leaderboard" | "live" | "settings") => void
 }) {
   const [wallet, setWallet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -61,16 +61,16 @@ export default function WalletScreen({ onLogout, onNavigate }: {
         setLoading(false);
         return;
       }
-      
+
       console.log('Loading wallet for user:', currentUser._id);
-      
+
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE}/wallet/my-wallet`, {
-        headers: {Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       console.log('Wallet response:', response.data);
-      
+
       if (response.data.success) {
         setWallet(response.data.data);
       } else {
@@ -91,14 +91,14 @@ export default function WalletScreen({ onLogout, onNavigate }: {
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
-      
+
       const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/wallet`, {
         // userId is REMOVED. Server gets it from token.
         userName: currentUser.name,
         userEmail: currentUser.email
       }, {
-        headers: {Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data.success) {
@@ -111,7 +111,7 @@ export default function WalletScreen({ onLogout, onNavigate }: {
 
   const loadTransactions = async () => {
     if (!wallet) return;
-    
+
     setTransactionsLoading(true);
     try {
       const response = await axios.get(`${API_BASE}/wallet/${wallet._id}/transactions`);
@@ -139,9 +139,10 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       const token = localStorage.getItem('token');
       const response = await axios.post(`${API_BASE}/wallet/add-money`, {
         amount: parseFloat(amount),
-        // userId removed
+        userEmail: currentUser.email,
+        userPhone: currentUser.phone
       }, {
-        headers: {Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data.success) {
@@ -274,7 +275,7 @@ export default function WalletScreen({ onLogout, onNavigate }: {
                 Available for matches and withdrawals
               </p>
             </div>
-            
+
             {wallet && (
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div className="text-center">
@@ -514,8 +515,8 @@ export default function WalletScreen({ onLogout, onNavigate }: {
               <Button variant="outline" onClick={() => setShowAddMoney(false)}>
                 Cancel
               </Button>
-              <Button 
-                onClick={initiateAddMoney} 
+              <Button
+                onClick={initiateAddMoney}
                 disabled={!amount || parseFloat(amount) < 100 || paymentLoading}
                 className="bg-green-500 hover:bg-green-600 text-black"
               >
@@ -540,11 +541,10 @@ export default function WalletScreen({ onLogout, onNavigate }: {
               key={item.screen}
               variant="ghost"
               size="sm"
-              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${
-                item.screen === "wallet"
+              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${item.screen === "wallet"
                   ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
                   : "text-gray-400 hover:text-green-400"
-              }`}
+                }`}
               onClick={() => {
                 if (item.screen !== "wallet") {
                   if (onNavigate) {

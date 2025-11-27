@@ -80,7 +80,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
     setStep("phone");
     setErrorMsg(null);
     setSuccessMsg(null);
-    
+
     if (m === "login") {
       setPhoneNumber("");
       setOtp("");
@@ -109,12 +109,12 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
   const sendOtp = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
-    
+
     if (phoneNumber.length < 10) {
       setErrorMsg("Enter a valid 10-digit phone number");
       return;
     }
-    
+
     setSending(true);
     try {
       const res = await axios.post(`${API_BASE}/otp/send`, {
@@ -191,18 +191,24 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
     return msg || "Something went wrong. Please try again.";
   };
 
-  const persistAndEnter = (user: ApiUser) => {
+  const persistAndEnter = (user: ApiUser, token?: string) => {
     try {
       localStorage.setItem("user", JSON.stringify(user));
-    } catch {}
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+    } catch { }
     setIsLoggedIn?.(true);
+    if (user.role && setUserRole) {
+      setUserRole(user.role);
+    }
     setCurrentScreen?.("home");
   };
 
   const completeRegistration = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
-    
+
     if (!verificationId) {
       setErrorMsg("Please verify your phone number first");
       return;
@@ -298,24 +304,19 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
 
       if (response.data?.success && response.data?.user) {
         const user = response.data.user;
-        
+
         console.log("Admin login successful, user:", user);
-        
-        // Store admin user in localStorage
-        localStorage.setItem("user", JSON.stringify(user));
-        
+
+        // Store admin user and token
+        persistAndEnter(user, response.data.token);
+
         setSuccessMsg("Admin login successful!");
-        
-        // Update app state
-        if (setIsLoggedIn) setIsLoggedIn(true);
-        if (setUserRole) setUserRole("admin");
-        if (setCurrentScreen) setCurrentScreen("home");
       } else {
         setErrorMsg("Admin login failed. Please check your credentials.");
       }
     } catch (error: any) {
       console.error("Admin login error:", error);
-      
+
       // Provide specific error message for admin login
       if (error?.response?.status === 401) {
         setErrorMsg("Invalid admin email or password. Please check your credentials.");
@@ -332,7 +333,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
   const handleLogin = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
-    
+
     if (!email.trim()) {
       setErrorMsg("Email is required");
       return;
@@ -348,10 +349,10 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
         email: email.trim().toLowerCase(),
         password,
       });
-      
+
       const authedUser = extractUser(loginRes.data);
       if (authedUser) {
-        persistAndEnter(authedUser); // → Home
+        persistAndEnter(authedUser, loginRes.data.token); // → Home
       } else {
         setErrorMsg("Invalid response from server");
       }
@@ -378,7 +379,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
                 <p className="text-sm text-gray-400">Tournament Platform</p>
               </div>
             </div>
-            
+
             {/* Auth Mode Tabs */}
             <div className="flex bg-gray-800 rounded-lg p-1">
               <Button
@@ -571,11 +572,11 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
                           <CheckCircle className="w-4 h-4 mr-2" />
                           {verifying ? "Verifying..." : "Verify OTP"}
                         </Button>
-                        
+
                         <div className="flex items-center justify-between">
-                          <Button 
-                            variant="ghost" 
-                            className="text-gray-400 hover:text-blue-400" 
+                          <Button
+                            variant="ghost"
+                            className="text-gray-400 hover:text-blue-400"
                             onClick={() => setStep("phone")}
                           >
                             Change Phone Number
