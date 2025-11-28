@@ -31,6 +31,17 @@ export default function WalletScreen({ onLogout, onNavigate }: {
   onLogout: () => void;
   onNavigate?: (screen: "home" | "squad" | "wallet" | "matches" | "leaderboard" | "live" | "settings") => void
 }) {
+  // Load Cashfree SDK
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    }
+  }, []);
+
   const [wallet, setWallet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showAddMoney, setShowAddMoney] = useState(false);
@@ -146,16 +157,23 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       });
 
       if (response.data.success) {
-        setPaymentUrl(response.data.paymentUrl);
+        setPaymentUrl(response.data.paymentUrl); // Keep for reference or fallback
         setShowAddMoney(false);
-        // Open payment URL in new tab
-        window.open(response.data.paymentUrl, '_blank');
-        showToast("Payment initiated! Please complete the payment.", "success");
-        // Refresh wallet after a delay
-        setTimeout(() => {
-          loadWallet();
-          loadTransactions();
-        }, 5000);
+
+        // Use Cashfree SDK for checkout
+        // @ts-ignore
+        const cashfree = await window.Cashfree({
+          mode: "sandbox" // or "production" based on env, but we'll default to sandbox for now or detect
+        });
+
+        const checkoutOptions = {
+          paymentSessionId: response.data.data.paymentSessionId,
+          redirectTarget: "_self", // Open in same tab
+        };
+
+        cashfree.checkout(checkoutOptions);
+
+        showToast("Payment initiated! Redirecting...", "success");
       }
     } catch (error: any) {
       showToast(error.response?.data?.error || "Failed to initiate payment", "error");
@@ -180,6 +198,23 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       loadTransactions();
     }
   }, [wallet, activeTab]);
+
+  // Handle Test Payment Callback
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('test_payment') === 'true') {
+        showToast("Test Payment Successful! Balance updated.", "success");
+        // Clear params
+        window.history.replaceState({}, '', '/');
+        // Refresh wallet
+        setTimeout(() => {
+          loadWallet();
+          loadTransactions();
+        }, 1000);
+      }
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -406,7 +441,35 @@ export default function WalletScreen({ onLogout, onNavigate }: {
                           <p className={`text-lg font-bold ${transaction.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
                             {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
                           </p>
-                          {getTransactionStatus(transaction.status)}
+                          <div className="flex items-center justify-end space-x-2">
+                            {getTransactionStatus(transaction.status)}
+                            {transaction.status === 'pending' && transaction.referenceId && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-xs border-blue-500/50 text-blue-400 hover:bg-blue-500/10 ml-2"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    showToast("Verifying payment...", "success");
+                                    const response = await axios.get(`${API_BASE}/wallet/payment-status/${transaction.referenceId}`);
+                                    if (response.data.success && response.data.data.status === 'success') {
+                                      showToast("Payment verified! Balance updated.", "success");
+                                      loadWallet();
+                                      loadTransactions();
+                                    } else {
+                                      showToast(`Status: ${response.data.data.status}`, "error");
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    showToast("Verification failed", "error");
+                                  }
+                                }}
+                              >
+                                Verify
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -444,22 +507,22 @@ export default function WalletScreen({ onLogout, onNavigate }: {
                     </label>
                     <Input
                       type="number"
-                      placeholder="Enter amount (min: ₹100)"
+                      placeholder="Enter amount (min: ₹1)"
                       className="bg-black border-gray-700 text-white text-lg text-center"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      min="100"
-                      step="100"
+                      min="1"
+                      step="1"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Minimum amount: ₹100 | Maximum amount: ₹50,000
+                      Minimum amount: ₹1 | Maximum amount: ₹50,000
                     </p>
                   </div>
 
                   <Button
                     className="w-full bg-green-500 hover:bg-green-600 text-black text-lg py-3"
                     onClick={initiateAddMoney}
-                    disabled={!amount || parseFloat(amount) < 100 || parseFloat(amount) > 50000 || paymentLoading}
+                    disabled={!amount || parseFloat(amount) < 1 || parseFloat(amount) > 50000 || paymentLoading}
                   >
                     {paymentLoading ? (
                       <>
@@ -503,12 +566,12 @@ export default function WalletScreen({ onLogout, onNavigate }: {
               </label>
               <Input
                 type="number"
-                placeholder="Enter amount (min: ₹100)"
+                placeholder="Enter amount (min: ₹1)"
                 className="bg-black border-gray-700 text-white text-lg text-center"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                min="100"
-                step="100"
+                min="1"
+                step="1"
               />
             </div>
             <div className="flex space-x-2">
@@ -517,7 +580,7 @@ export default function WalletScreen({ onLogout, onNavigate }: {
               </Button>
               <Button
                 onClick={initiateAddMoney}
-                disabled={!amount || parseFloat(amount) < 100 || paymentLoading}
+                disabled={!amount || parseFloat(amount) < 1 || paymentLoading}
                 className="bg-green-500 hover:bg-green-600 text-black"
               >
                 {paymentLoading ? 'Processing...' : 'Add Money'}
@@ -542,8 +605,8 @@ export default function WalletScreen({ onLogout, onNavigate }: {
               variant="ghost"
               size="sm"
               className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${item.screen === "wallet"
-                  ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
-                  : "text-gray-400 hover:text-green-400"
+                ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
+                : "text-gray-400 hover:text-green-400"
                 }`}
               onClick={() => {
                 if (item.screen !== "wallet") {

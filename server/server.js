@@ -2,6 +2,9 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// Load env vars immediately
+dotenv.config();
 const mongoose = require('mongoose');
 const authController = require('./controller/authController');
 const matchController = require('./controller/matchController');
@@ -12,7 +15,7 @@ const walletController = require('./controller/walletController');
 const adminAuth = require('./middleware/adminAuth');
 const userAuth = require('./middleware/userAuth');
 
-dotenv.config();
+
 
 const app = express();
 

@@ -83,6 +83,14 @@ export default function PUBGTournamentApp() {
           setUserRole(user.role)
         }
       }
+
+      // Check URL params for screen navigation (e.g. payment callback)
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('screen') === 'wallet' || params.get('test_payment') === 'true') {
+          setCurrentScreen("wallet");
+        }
+      }
     } catch { }
   }, [])
 

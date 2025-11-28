@@ -21,6 +21,22 @@ exports.getAllMatches = async (req, res) => {
   }
 };
 
+// Get matches the current user has joined
+exports.getMyMatches = async (req, res) => {
+  try {
+    // Get user id from the request
+    const userId = req.user.userId;
+
+    const matches = await Match.find({
+      'registeredPlayers.userId': userId
+    }).sort({ startTime: -1 }); // Newest matches first
+    
+    res.json({ success: true, data: matches });
+  } catch (error) {
+    res.status(500).json({success: false, error: error.message});
+  }
+};
+
 // Create new match
 exports.createMatch = async (req, res) => {
   try {

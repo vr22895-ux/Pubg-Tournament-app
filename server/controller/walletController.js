@@ -126,6 +126,14 @@ const initiateAddMoney = async (req, res) => {
 
     console.log('Add money request:', { amount, userId, userEmail, userPhone });
 
+    // DEBUG: Check Cashfree Config
+    console.log('DEBUG: Cashfree Config:', {
+      appId: CASHFREE_CONFIG.appId ? '***' + CASHFREE_CONFIG.appId.slice(-4) : 'MISSING',
+      secretKey: CASHFREE_CONFIG.secretKey ? '***' + CASHFREE_CONFIG.secretKey.slice(-4) : 'MISSING',
+      apiUrl: CASHFREE_CONFIG.apiUrl,
+      env: process.env.NODE_ENV
+    });
+
     // Validate required fields
     if (!amount || amount < 1 || amount > 50000) {
       return res.status(400).json({
@@ -182,7 +190,7 @@ const initiateAddMoney = async (req, res) => {
         customer_phone: userPhone || "9999999999"
       },
       order_meta: {
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wallet?order_id=${orderId}`
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/?screen=wallet&order_id=${orderId}`
       }
     };
 
@@ -190,9 +198,9 @@ const initiateAddMoney = async (req, res) => {
     // NOTE: signature generation depends on a configured CASHFREE secret key.
     // Generate the signature only when performing real Cashfree requests to avoid
     // runtime errors in development/test mode when the secret key is missing.
-    if (true) { // Always skip payment for testing
+    if (false) { // Disabled test mode to allow real Cashfree payments
       // Simulate successful payment for testing - don't open real payment URL
-      const paymentUrl = `http://localhost:3000/wallet?test_payment=true&order_id=${orderId}&amount=${amount}`;
+      const paymentUrl = `http://localhost:3000/?screen=wallet&test_payment=true&order_id=${orderId}&amount=${amount}`;
 
       res.json({
         success: true,
@@ -250,6 +258,7 @@ const initiateAddMoney = async (req, res) => {
         await wallet.save();
       }
 
+      console.error('Cashfree Initiation Failed:', JSON.stringify(cashfreeData, null, 2));
       res.status(400).json({
         success: false,
         error: 'Failed to initiate payment',
@@ -321,7 +330,7 @@ const handleCashfreeWebhook = async (req, res) => {
   }
 };
 
-// Check payment status
+// Check payment status (and sync with Cashfree)
 const checkPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -340,10 +349,55 @@ const checkPaymentStatus = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Transaction not found' });
     }
 
+    // If already success, return immediately
+    if (transaction.status === 'success') {
+      return res.json({
+        success: true,
+        data: {
+          status: transaction.status,
+          amount: transaction.amount,
+          description: transaction.description,
+          createdAt: transaction.createdAt
+        }
+      });
+    }
+
+    // If pending, verify with Cashfree
+    try {
+      const response = await fetch(`${CASHFREE_CONFIG.apiUrl}/orders/${orderId}`, {
+        headers: {
+          'x-client-id': CASHFREE_CONFIG.appId,
+          'x-client-secret': CASHFREE_CONFIG.secretKey,
+          'x-api-version': '2023-08-01'
+        }
+      });
+
+      const data = await response.json();
+      console.log('Cashfree Verification Response:', data);
+
+      if (data.order_status === 'PAID') {
+        // Update transaction
+        transaction.status = 'success';
+        // Update wallet balance
+        wallet.balance += data.order_amount;
+        wallet.totalDeposits += data.order_amount;
+        wallet.lastTransactionAt = new Date();
+
+        await wallet.save();
+        console.log('Wallet updated via verification for order:', orderId);
+      } else if (data.order_status === 'EXPIRED' || data.order_status === 'FAILED') {
+        transaction.status = 'failed';
+        await wallet.save();
+      }
+    } catch (apiError) {
+      console.error('Failed to verify with Cashfree:', apiError);
+      // Continue to return current status
+    }
+
     res.json({
       success: true,
       data: {
-        status: transaction.status,
+        status: transaction.status, // Will be updated if verification succeeded
         amount: transaction.amount,
         description: transaction.description,
         createdAt: transaction.createdAt
