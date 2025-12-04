@@ -94,6 +94,7 @@ app.post('/api/wallet/webhook/cashfree', walletController.handleCashfreeWebhook)
 
 // routes
 app.get('/api/matches', matchController.getAllMatches);
+app.get('/api/matches/my-matches', userAuth, matchController.getMyMatches);
 app.post('/api/matches', matchController.createMatch);
 
 // Match management routes - specific routes first

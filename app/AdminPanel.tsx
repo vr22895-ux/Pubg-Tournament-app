@@ -293,30 +293,25 @@ export default function AdminPanel({ onSwitchToUser }: { onSwitchToUser?: () => 
 
   // Load match participants
   const loadMatchParticipants = async (matchId: string) => {
-    setParticipantsLoading(true);
-    try {
-      // TODO: Replace this with actual API call when backend supports match participants
-      // For now, we'll use an empty array and show a message
-      setMatchParticipants([]);
-      
-      // Real implementation would be:
-      // const token = localStorage.getItem('token');
-      // const response = await axios.get(`${API_BASE}/matches/${matchId}/participants`, {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
-      // if (response.data?.success) {
-      //   setMatchParticipants(response.data.data);
-      // }
-      
-      console.log(`No participants API available yet for match ${matchId}`);
-      
-    } catch (error: any) {
-      console.error("Failed to load match participants:", error);
-      setMatchParticipants([]);
-    } finally {
-      setParticipantsLoading(false);
+  setParticipantsLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    
+    // 👇 CHANGED: Point to the correct existing endpoint
+    const response = await axios.get(`${API_BASE}/matches/${matchId}/registrations`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data?.success) {
+      // The API returns { data: { registeredPlayers: [...] } }
+      setMatchParticipants(response.data.data.registeredPlayers);
     }
-  };
+  } catch (error: any) {
+    console.error("Failed to load participants:", error);
+    showToast("Failed to load participants", "error");
+  } finally {
+    setParticipantsLoading(false);
+  }
+};
 
   // Handle match selection for results
   const handleMatchSelection = (matchId: string) => {

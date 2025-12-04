@@ -2,37 +2,14 @@
 
 import React, { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Bell,
-  Clock,
-  Crown,
-  Eye,
-  Gamepad2,
-  Home,
-  IndianRupee,
-  Share2,
-  Target,
-  Timer,
-  Trophy,
-  Users,
-  Wallet,
-  LogOut,
+  Bell, Clock, Crown, Eye, Gamepad2, Home, IndianRupee, Share2, Target,
+  Timer, Trophy, Users, Wallet, LogOut, CheckCircle,
 } from "lucide-react";
 
 // -------- Screen Router Type --------
@@ -111,9 +88,9 @@ async function getUserStats(): Promise<UserStats> {
   try {
     const userStr = localStorage.getItem("user");
     if (!userStr) throw new Error("No user found");
-    
+
     const user = JSON.parse(userStr);
-    
+
     // Get wallet balance
     let walletBalance = 0;
     try {
@@ -124,7 +101,7 @@ async function getUserStats(): Promise<UserStats> {
     } catch (walletError) {
       console.log("Wallet not found, using default balance");
     }
-    
+
     return {
       totalMatches: 0,
       matchesWon: 0,
@@ -168,6 +145,7 @@ export default function HomeScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchDoc[]>([]);
+  const [myMatches, setMyMatches] = useState<MatchDoc[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({
     totalMatches: 0,
     matchesWon: 0,
@@ -177,34 +155,35 @@ export default function HomeScreen({
   });
   const [liveMatchesCount, setLiveMatchesCount] = useState(0);
 
+  //useEffect hook to load matches and user stats
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoading(true);
-        
+
         // Load matches and user stats in parallel
         const [matchesData, statsData] = await Promise.all([
           listMatches(),
           getUserStats()
         ]);
-        
+
         if (!alive) return;
-        
+
         // Process matches data
         const withDerived = matchesData.map((m, i) => ({
           ...m,
           image: m.image || `/placeholder.svg?height=80&width=80&text=${encodeURIComponent(m.map)}`,
           playersJoined: m.playersJoined ?? 0, // Remove hardcoded calculation
         }));
-        
+
         setMatches(withDerived);
         setUserStats(statsData);
-        
+
         // Count live matches
         const liveCount = matchesData.filter(m => m.status === "live").length;
         setLiveMatchesCount(liveCount);
-        
+
         setError(null);
       } catch (e: any) {
         setError(e?.response?.data?.error || e?.message || "Failed to load data");
@@ -221,7 +200,7 @@ export default function HomeScreen({
   const live = useMemo(() => matches.filter((m) => m.status === "live"), [matches]);
 
   const handleLogout = () => {
-    try { localStorage.removeItem("user") } catch {}
+    try { localStorage.removeItem("user") } catch { }
     setIsLoggedIn(false);
     setCurrentScreen("login");
   };
@@ -233,50 +212,44 @@ export default function HomeScreen({
         alert("Please login to join matches");
         return;
       }
-      
+
       const user = JSON.parse(userStr);
-      
-      // First, get user's wallet
-      const walletResponse = await axios.get(`${API_BASE}/wallet/balance/${user._id}`);
-      if (!walletResponse.data?.success) {
-        alert("Wallet not found. Please create a wallet first.");
-        setCurrentScreen("wallet");
-        return;
-      }
-      
-      const wallet = walletResponse.data.data;
-      if (wallet.balance < entryFee) {
-        alert(`Insufficient balance. You need ₹${entryFee} but have ₹${wallet.balance}. Please add money to your wallet.`);
-        setCurrentScreen("wallet");
-        return;
-      }
-      
-      // Deduct entry fee from wallet
-      const deductResponse = await axios.post(`${API_BASE}/wallet/${wallet.walletId}/deduct-entry-fee`, {
-        amount: entryFee,
-        matchId: matchId,
-        matchName: matchName
+
+      // Call the join match endpoint
+      // The backend handles wallet deduction and registration atomically
+      const response = await axios.post(`${API_BASE}/matches/${matchId}/join`, {
+        userId: user._id
       });
-      
-      if (deductResponse.data?.success) {
+
+      if (response.data?.success) {
         alert(`Successfully joined ${matchName}! Entry fee of ₹${entryFee} deducted from wallet.`);
-        // Refresh user stats to update wallet balance
+
+        // Refresh data
         const [matchesData, statsData] = await Promise.all([
           listMatches(),
           getUserStats()
         ]);
-        setMatches(matchesData.map((m, i) => ({
+
+        const withDerived = matchesData.map((m, i) => ({
           ...m,
           image: m.image || `/placeholder.svg?height=80&width=80&text=${encodeURIComponent(m.map)}`,
           playersJoined: m.playersJoined ?? 0,
-        })));
+        }));
+
+        setMatches(withDerived);
         setUserStats(statsData);
       } else {
-        alert(deductResponse.data?.error || "Failed to join match");
+        alert(response.data?.error || "Failed to join match");
       }
     } catch (error: any) {
       console.error("Error joining match:", error);
-      alert(error.response?.data?.error || "Failed to join match");
+      // Handle specific error cases if needed
+      if (error.response?.data?.required && error.response?.data?.available) {
+        alert(`Insufficient balance. Required: ₹${error.response.data.required}, Available: ₹${error.response.data.available}`);
+        setCurrentScreen("wallet");
+      } else {
+        alert(error.response?.data?.error || "Failed to join match");
+      }
     }
   };
 
@@ -473,7 +446,7 @@ export default function HomeScreen({
                                     <p className="text-sm text-gray-400">Will be deducted from wallet</p>
                                   </div>
                                   <div className="flex space-x-2">
-                                    <Button 
+                                    <Button
                                       className="flex-1 bg-green-500 hover:bg-green-600 text-black"
                                       onClick={() => joinMatch(match._id, match.entryFee, match.name)}
                                     >
@@ -531,11 +504,10 @@ export default function HomeScreen({
               key={item.screen}
               variant="ghost"
               size="sm"
-              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${
-                currentScreen === item.screen
-                  ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
-                  : "text-gray-400 hover:text-green-400"
-              }`}
+              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${currentScreen === item.screen
+                ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
+                : "text-gray-400 hover:text-green-400"
+                }`}
               onClick={() => setCurrentScreen(item.screen)}
             >
               <item.icon className={`w-5 h-5 ${currentScreen === item.screen ? "animate-pulse" : ""}`} />

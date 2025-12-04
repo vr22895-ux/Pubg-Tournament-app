@@ -52,6 +52,7 @@ import type { Screen } from "./LoginScreen"
 import axios from "axios";
 import SquadScreen from './components/SquadScreen';
 import WalletScreen from './components/WalletScreen';
+import MyMatchesScreen from './components/MyMatchesScreen';
 
 // Main App
 export default function PUBGTournamentApp() {
@@ -119,17 +120,7 @@ export default function PUBGTournamentApp() {
   // Import WalletScreen component
   const WalletScreenComponent = () => <WalletScreen onLogout={handleLogout} onNavigate={setCurrentScreen} />;
 
-  const MyMatchesScreen = () => (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-green-400 mb-4">My Matches</h1>
-        <p className="text-gray-400">Match history coming soon...</p>
-        <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
-          Logout
-        </Button>
-      </div>
-    </div>
-  )
+
 
   const LiveScreen = () => (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -180,7 +171,7 @@ export default function PUBGTournamentApp() {
     case "wallet":
       return <WalletScreenComponent />
     case "matches":
-      return <MyMatchesScreen />
+      return <MyMatchesScreen onLogout={handleLogout} onNavigate={setCurrentScreen} />
     // case "leaderboard":
     //   return <LeaderboardScreen />
     case "live":
