@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { walletService } from "../services/walletService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,23 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Wallet,
-  Plus,
-  History,
-  LogOut,
-  Home,
-  Users,
-  Gamepad2,
-  Trophy,
-  CreditCard,
-  CheckCircle,
-  XCircle,
-  Clock,
-  TrendingUp,
-  TrendingDown
+  Wallet, Plus, History, LogOut, Home, Users, Gamepad2, Trophy, Settings, CreditCard, 
+  CheckCircle, XCircle, Clock, TrendingUp, TrendingDown
 } from "lucide-react";
-
-const API_BASE = "http://localhost:5050/api";
 
 export default function WalletScreen({ onLogout, onNavigate }: {
   onLogout: () => void;
@@ -63,6 +49,25 @@ export default function WalletScreen({ onLogout, onNavigate }: {
     }
   };
 
+  const createWallet = async () => {
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
+
+      const response = await walletService.createWallet({
+        // userId is REMOVED. Server gets it from token.
+        userName: currentUser.name,
+        userEmail: currentUser.email
+      });
+
+      if (response.success) {
+        setWallet(response.data);
+      }
+    } catch (error: any) {
+      console.error('Error creating wallet:', error);
+    }
+  };
+
   const loadWallet = async () => {
     setLoading(true);
     try {
@@ -75,15 +80,12 @@ export default function WalletScreen({ onLogout, onNavigate }: {
 
       console.log('Loading wallet for user:', currentUser._id);
 
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE}/wallet/my-wallet`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await walletService.getMyWallet();
 
-      console.log('Wallet response:', response.data);
+      console.log('Wallet response:', response);
 
-      if (response.data.success) {
-        setWallet(response.data.data);
+      if (response.success) {
+        setWallet(response.data);
       } else {
         console.log('Wallet not found, creating new wallet');
         await createWallet();
@@ -98,36 +100,14 @@ export default function WalletScreen({ onLogout, onNavigate }: {
     }
   };
 
-  const createWallet = async () => {
-    try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) return;
-
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE}/wallet`, {
-        // userId is REMOVED. Server gets it from token.
-        userName: currentUser.name,
-        userEmail: currentUser.email
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        setWallet(response.data.data);
-      }
-    } catch (error: any) {
-      console.error('Error creating wallet:', error);
-    }
-  };
-
   const loadTransactions = async () => {
     if (!wallet) return;
 
     setTransactionsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/wallet/${wallet._id}/transactions`);
-      if (response.data.success) {
-        setTransactions(response.data.data);
+      const response = await walletService.getTransactions(wallet._id);
+      if (response.success) {
+        setTransactions(response.data);
       }
     } catch (error: any) {
       console.error('Error loading transactions:', error);
@@ -147,17 +127,14 @@ export default function WalletScreen({ onLogout, onNavigate }: {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE}/wallet/add-money`, {
+      const response = await walletService.initiateAddMoney({
         amount: parseFloat(amount),
         userEmail: currentUser.email,
         userPhone: currentUser.phone
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (response.data.success) {
-        setPaymentUrl(response.data.paymentUrl); // Keep for reference or fallback
+      if (response.success) {
+        setPaymentUrl(response.paymentUrl); // Keep for reference or fallback
         setShowAddMoney(false);
 
         // Use Cashfree SDK for checkout
@@ -167,7 +144,7 @@ export default function WalletScreen({ onLogout, onNavigate }: {
         });
 
         const checkoutOptions = {
-          paymentSessionId: response.data.data.paymentSessionId,
+          paymentSessionId: response.data.paymentSessionId,
           redirectTarget: "_self", // Open in same tab
         };
 
@@ -452,13 +429,13 @@ export default function WalletScreen({ onLogout, onNavigate }: {
                                   e.stopPropagation();
                                   try {
                                     showToast("Verifying payment...", "success");
-                                    const response = await axios.get(`${API_BASE}/wallet/payment-status/${transaction.referenceId}`);
-                                    if (response.data.success && response.data.data.status === 'success') {
+                                    const response = await walletService.checkPaymentStatus(transaction.referenceId);
+                                    if (response.success && response.data.status === 'success') {
                                       showToast("Payment verified! Balance updated.", "success");
                                       loadWallet();
                                       loadTransactions();
                                     } else {
-                                      showToast(`Status: ${response.data.data.status}`, "error");
+                                      showToast(`Status: ${response.data.status}`, "error");
                                     }
                                   } catch (err) {
                                     console.error(err);
@@ -599,6 +576,7 @@ export default function WalletScreen({ onLogout, onNavigate }: {
             { icon: Gamepad2, label: "Matches", screen: "matches" as const },
             { icon: Trophy, label: "Leaderboard", screen: "leaderboard" as const },
             { icon: Wallet, label: "Wallet", screen: "wallet" as const },
+            { icon: Settings, label: "Settings", screen: "settings" as const },
           ].map((item) => (
             <Button
               key={item.screen}

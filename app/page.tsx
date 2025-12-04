@@ -2,67 +2,39 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Users,
-  Trophy,
-  Wallet,
-  Play,
-  Settings,
-  Shield,
-  Clock,
-  IndianRupee,
-  Target,
-  Crown,
-  Zap,
-  Plus,
-  Eye,
-  UserPlus,
-  Calendar,
-  Video,
-  MessageSquare,
-  Ban,
-  Copy,
-  Share2,
-  Star,
-  Flame,
-  Lock,
-  History,
-  Filter,
-  Bell,
-  Home,
-  User,
-  LogOut,
-  DollarSign,
-  Send,
-  CheckCircle,
-} from "lucide-react"
+import { invitationService } from "./services/invitationService"
 import AdminPanel from "./AdminPanel"
 import HomeScreen from "./home"
 import LoginScreen from "./LoginScreen"
 import type { Screen } from "./LoginScreen"
-import axios from "axios";
 import SquadScreen from './components/SquadScreen';
 import WalletScreen from './components/WalletScreen';
 import MyMatchesScreen from './components/MyMatchesScreen';
+import SettingsScreen from './components/SettingsScreen';
 
 // Main App
 export default function PUBGTournamentApp() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("login")
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userRole, setUserRole] = useState<"user" | "admin">("user")
-  const [selectedMatch, setSelectedMatch] = useState<any>(null)
   const [walletBalance, setWalletBalance] = useState(0)
-  const [showRoomDetails, setShowRoomDetails] = useState(false)
   const [pendingInvitationsCount, setPendingInvitationsCount] = useState(0)
+
+  // Load pending invitations count
+  const loadPendingInvitationsCount = async () => {
+    try {
+      const raw = localStorage.getItem("user")
+      if (raw) {
+        const user = JSON.parse(raw)
+        const response = await invitationService.getUserInvitations(user._id)
+        if (response?.success) {
+          setPendingInvitationsCount(response.data.length)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load invitations count:", error)
+    }
+  }
 
   // Hydrate from localStorage (auto-login)
   useEffect(() => {
@@ -101,44 +73,14 @@ export default function PUBGTournamentApp() {
     setCurrentScreen("login")
   }
 
-  // Load pending invitations count
-  const loadPendingInvitationsCount = async () => {
-    try {
-      const raw = localStorage.getItem("user")
-      if (raw) {
-        const user = JSON.parse(raw)
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5050/api'}/invitations/user/${user._id}`)
-        if (response.data?.success) {
-          setPendingInvitationsCount(response.data.data.length)
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load invitations count:", error)
-    }
-  }
-
   // Import WalletScreen component
   const WalletScreenComponent = () => <WalletScreen onLogout={handleLogout} onNavigate={setCurrentScreen} />;
-
-
 
   const LiveScreen = () => (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
       <div className="text-center">
         <h1 className="text-2xl font-bold text-green-400 mb-4">Live Matches</h1>
         <p className="text-gray-400">Live streaming coming soon...</p>
-        <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
-          Logout
-        </Button>
-      </div>
-    </div>
-  )
-
-  const SettingsScreen = () => (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-green-400 mb-4">Settings</h1>
-        <p className="text-gray-400">Settings panel coming soon...</p>
         <Button onClick={handleLogout} className="mt-4 bg-red-500 hover:bg-red-600">
           Logout
         </Button>
@@ -161,8 +103,6 @@ export default function PUBGTournamentApp() {
     return <AdminPanel onSwitchToUser={() => setUserRole("user")} />
   }
 
-
-
   switch (currentScreen) {
     case "home":
       return <HomeScreen currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} walletBalance={walletBalance} setIsLoggedIn={setIsLoggedIn} />
@@ -177,7 +117,7 @@ export default function PUBGTournamentApp() {
     case "live":
       return <LiveScreen />
     case "settings":
-      return <SettingsScreen />
+      return <SettingsScreen onLogout={handleLogout} onNavigate={setCurrentScreen} />
     default:
       return <HomeScreen currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} walletBalance={walletBalance} setIsLoggedIn={setIsLoggedIn} />
   }

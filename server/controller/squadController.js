@@ -114,7 +114,7 @@ const getSquadById = async (req, res) => {
 // Create new squad
 const createSquad = async (req, res) => {
   try {
-    const { name, leaderName, leaderPubgId } = req.body;
+    const { name } = req.body;
     // Secure: Get leaderId from token
     const leaderId = req.user.userId;
 
@@ -130,13 +130,27 @@ const createSquad = async (req, res) => {
       });
     }
 
+    // Fetch leader details from DB
+    const leader = await User.findById(leaderId);
+    if (!leader) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Validate PUBG ID
+    if (!leader.pubgId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please update your profile with your PUBG ID before creating a squad.'
+      });
+    }
+
     const squad = new Squad({
       name,
       leader: leaderId,
       members: [{
         userId: leaderId,
-        name: leaderName,
-        pubgId: leaderPubgId,
+        name: leader.name || leader.email.split('@')[0], // Fallback to email username if name is missing
+        pubgId: leader.pubgId,
         role: 'leader',
         status: 'active'
       }]
@@ -157,6 +171,7 @@ const createSquad = async (req, res) => {
 
     res.json({ success: true, data: populatedSquad });
   } catch (error) {
+    console.error('Error in createSquad:', error);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 };
@@ -244,12 +259,20 @@ const inviteToSquad = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Inviter not found' });
     }
 
+    // Validate PUBG ID for inviter (optional but good practice)
+    if (!inviter.pubgId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please update your profile with your PUBG ID before sending invitations.'
+      });
+    }
+
     // Create invitation
     const invitation = new Invitation({
       squadId,
       squadName: squad.name,
       invitedUserId,
-      invitedByName: inviter.name,
+      invitedByName: inviter.name || inviter.email.split('@')[0],
       invitedByPubgId: inviter.pubgId,
       message: req.body.message || ''
     });
@@ -272,7 +295,6 @@ const inviteToSquad = async (req, res) => {
 const requestToJoinSquad = async (req, res) => {
   try {
     const { squadId } = req.params;
-    const { userName, userPubgId } = req.body;
     // Secure: Get userId from token
     const userId = req.user.userId;
 
@@ -302,7 +324,7 @@ const requestToJoinSquad = async (req, res) => {
       return res.status(400).json({ success: false, error: 'You are already in a squad' });
     }
 
-    // Check if user is already a member of this squad
+    // Check if user is already a member of this squad (redundant if existingSquad check passes, but safe)
     const isAlreadyMember = squad.members.some(member =>
       member.userId.toString() === userId
     );
@@ -311,40 +333,46 @@ const requestToJoinSquad = async (req, res) => {
       return res.status(400).json({ success: false, error: 'You are already a member of this squad' });
     }
 
-    // Check if there's already a pending invitation
+    // Check if request already exists
     const Invitation = require('../schema/Invitation');
-    const existingInvitation = await Invitation.findOne({
+    const existingRequest = await Invitation.findOne({
       squadId,
-      invitedUserId: userId,
+      invitedUserId: userId, // In join request, invitedUserId is the requester
       status: 'pending'
     });
 
-    if (existingInvitation) {
+    if (existingRequest) {
+      return res.status(400).json({ success: false, error: 'Join request already sent' });
+    }
+
+    // Fetch user details
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Validate PUBG ID
+    if (!user.pubgId) {
       return res.status(400).json({
         success: false,
-        error: 'You already have a pending invitation to this squad'
+        error: 'Please update your profile with your PUBG ID before joining a squad.'
       });
     }
 
-    // Create join request invitation
+    // Create join request (Invitation with type 'request' or implied by context)
     const invitation = new Invitation({
       squadId,
       squadName: squad.name,
-      invitedUserId: userId,
-      invitedByName: userName,
-      invitedByPubgId: userPubgId,
-      message: `${userName} wants to join your squad!`,
-      type: 'join_request'
+      invitedUserId: userId, // The user requesting to join
+      invitedByName: user.name || user.email.split('@')[0],
+      invitedByPubgId: user.pubgId,
+      message: `${user.name || 'User'} wants to join your squad!`,
+      type: 'join_request' // Explicitly mark as request
     });
 
     await invitation.save();
 
-    res.json({
-      success: true,
-      message: 'Join request sent successfully. The squad leader will review your request.',
-      data: invitation
-    });
-
+    res.json({ success: true, message: 'Join request sent successfully' });
   } catch (error) {
     console.error('Error in requestToJoinSquad:', error);
     res.status(500).json({ success: false, error: 'Server error' });

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useState } from "react";
+import { authService } from "./services/authService";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Target, Phone, Send, Mail, Gamepad2, CheckCircle, Shield, Lock, Eye, EyeOff, User } from "lucide-react";
@@ -16,15 +16,13 @@ export type Screen =
   | "leaderboard"
   | "live"
   | "settings"
-  | "profile"; // ⬅️ added
+  | "profile";
 
 type Props = {
   setIsLoggedIn?: React.Dispatch<React.SetStateAction<boolean>>;
   setCurrentScreen?: (s: Screen) => void;
   setUserRole?: React.Dispatch<React.SetStateAction<"user" | "admin">>;
 };
-
-const API_BASE = "http://localhost:5050/api";
 
 type ApiUser = {
   _id?: string;
@@ -106,6 +104,23 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
     }
   };
 
+  const humanizeAxiosError = (err: any): string => {
+    const status = err?.response?.status;
+    const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message;
+
+    // For admin login, provide more specific error messages
+    if (status === 401) {
+      if (mode === "admin") {
+        return "Invalid admin email or password. Please check your credentials.";
+      }
+      return "Authentication failed. Please try again.";
+    }
+    if (status === 429) return "Too many attempts. Please wait a minute and try again.";
+    if (status === 400) return msg || "Invalid request. Please check your input.";
+    if (status === 500) return "Server error. Please try again later.";
+    return msg || "Something went wrong. Please try again.";
+  };
+
   const sendOtp = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -117,14 +132,14 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
 
     setSending(true);
     try {
-      const res = await axios.post(`${API_BASE}/otp/send`, {
+      const res = await authService.sendOtp({
         countryCode: "91",
         mobileNumber: phoneNumber,
         flowType: "SMS",
         otpLength: 6,
       });
 
-      const payload = res.data?.verificationId ? res.data : res.data?.data || {};
+      const payload = res.verificationId ? res : res.data || {};
       if (!payload?.verificationId) throw new Error("Missing verificationId from server");
 
       setVerificationId(String(payload.verificationId));
@@ -153,8 +168,9 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
 
     setVerifying(true);
     try {
-      await axios.get(`${API_BASE}/otp/verify`, {
-        params: { verificationId, code: otp.replace(/\D/g, "") },
+      await authService.verifyOtp({
+        verificationId,
+        code: otp.replace(/\D/g, "")
       });
 
       // OTP verified successfully, proceed to registration details
@@ -173,23 +189,6 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
     const t = setInterval(() => setResendTimer((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(t);
   }, [step, resendTimer]);
-
-  const humanizeAxiosError = (err: any): string => {
-    const status = err?.response?.status;
-    const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message;
-
-    // For admin login, provide more specific error messages
-    if (status === 401) {
-      if (mode === "admin") {
-        return "Invalid admin email or password. Please check your credentials.";
-      }
-      return "Authentication with OTP provider failed. Ask admin to refresh MC token on server.";
-    }
-    if (status === 429) return "Too many attempts. Please wait a minute and try again.";
-    if (status === 400) return msg || "Invalid request. Please check your input.";
-    if (status === 500) return "Server error. Please try again later.";
-    return msg || "Something went wrong. Please try again.";
-  };
 
   const persistAndEnter = (user: ApiUser, token?: string) => {
     try {
@@ -240,7 +239,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
 
     setRegistering(true);
     try {
-      const res = await axios.post(`${API_BASE}/auth/register`, {
+      const res = await authService.register({
         phone: phoneNumber,
         pubgId,
         email,
@@ -248,7 +247,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
         name,
       });
 
-      if (res.data?.success) {
+      if (res.success) {
         // ✅ Registration success — switch to Login tab and reset
         setSuccessMsg("Registration successful! Please log in with your email and password.");
         setMode("login");
@@ -262,7 +261,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
         setPassword("");
         setName("");
       } else {
-        setErrorMsg(res.data?.error || "Registration failed");
+        setErrorMsg(res.error || "Registration failed");
       }
     } catch (err: any) {
       setErrorMsg(humanizeAxiosError(err));
@@ -285,30 +284,20 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
     console.log("Attempting admin login with:", { email: adminEmail, password: "***" });
 
     try {
-      // First test if server is reachable
-      try {
-        await axios.get(`${API_BASE}/health`);
-        console.log("Server is reachable");
-      } catch (healthError) {
-        console.error("Server health check failed:", healthError);
-        setErrorMsg("Cannot connect to server. Please check if the server is running.");
-        return;
-      }
-
-      const response = await axios.post(`${API_BASE}/auth/admin/login`, {
+      const response = await authService.adminLogin({
         email: adminEmail,
         password: adminPassword,
       });
 
-      console.log("Admin login response:", response.data);
+      console.log("Admin login response:", response);
 
-      if (response.data?.success && response.data?.user) {
-        const user = response.data.user;
+      if (response.success && response.user) {
+        const user = response.user;
 
         console.log("Admin login successful, user:", user);
 
         // Store admin user and token
-        persistAndEnter(user, response.data.token);
+        persistAndEnter(user, response.token);
 
         setSuccessMsg("Admin login successful!");
       } else {
@@ -345,14 +334,14 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
 
     setVerifying(true);
     try {
-      const loginRes = await axios.post(`${API_BASE}/auth/login`, {
+      const loginRes = await authService.login({
         email: email.trim().toLowerCase(),
         password,
       });
 
-      const authedUser = extractUser(loginRes.data);
+      const authedUser = extractUser(loginRes);
       if (authedUser) {
-        persistAndEnter(authedUser, loginRes.data.token); // → Home
+        persistAndEnter(authedUser, loginRes.token); // → Home
       } else {
         setErrorMsg("Invalid response from server");
       }

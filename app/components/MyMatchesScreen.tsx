@@ -1,18 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { matchService } from "../services/matchService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Bell, Clock, Crown, Eye, Gamepad2, Home, IndianRupee, Share2, Target,
-    Timer, Trophy, Users, Wallet, LogOut, CheckCircle,
+    Timer, Trophy, Users, Wallet, LogOut, CheckCircle, Settings
 } from "lucide-react";
-
-// -------- API base --------
-const API_BASE = "http://localhost:5050/api";
 
 // -------- Types --------
 type MapName = "Erangel" | "Sanhok" | "Miramar" | "Vikendi";
@@ -55,14 +52,9 @@ export default function MyMatchesScreen({
 
     // Function to load my matches
     async function listMyMatches() {
-        const token = localStorage.getItem("token");
-        if (!token) return [];
-
         try {
-            const res = await axios.get(`${API_BASE}/matches/my-matches`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            return res.data.data;
+            const data = await matchService.getMyMatches();
+            return data.data; // Assuming service returns { success: true, data: [...] }
         } catch (err) {
             console.error("Failed to load my matches", err);
             throw err;
@@ -159,8 +151,8 @@ export default function MyMatchesScreen({
                                                     <Target className="w-10 h-10 text-black" />
                                                 </div>
                                                 <Badge className={`absolute -top-2 -right-2 text-white text-xs px-2 py-1 ${match.status === 'live' ? 'bg-red-500 animate-pulse' :
-                                                        match.status === 'completed' ? 'bg-blue-500' :
-                                                            match.status === 'cancelled' ? 'bg-gray-500' : 'bg-green-500'
+                                                    match.status === 'completed' ? 'bg-blue-500' :
+                                                        match.status === 'cancelled' ? 'bg-gray-500' : 'bg-green-500'
                                                     }`}>
                                                     {match.status === 'upcoming' ? (
                                                         <span className="flex items-center"><Timer className="w-3 h-3 mr-1" />{timeLeft(match.startTime)}</span>
@@ -221,14 +213,15 @@ export default function MyMatchesScreen({
                         { icon: Gamepad2, label: "Matches", screen: "matches" as const },
                         { icon: Trophy, label: "Leaderboard", screen: "leaderboard" as const },
                         { icon: Wallet, label: "Wallet", screen: "wallet" as const },
+                        { icon: Settings, label: "Settings", screen: "settings" as const },
                     ].map((item) => (
                         <Button
                             key={item.screen}
                             variant="ghost"
                             size="sm"
                             className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${item.screen === "matches"
-                                    ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
-                                    : "text-gray-400 hover:text-green-400"
+                                ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
+                                : "text-gray-400 hover:text-green-400"
                                 }`}
                             onClick={() => onNavigate(item.screen)}
                         >

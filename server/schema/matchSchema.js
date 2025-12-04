@@ -11,7 +11,7 @@ const matchSchema = new mongoose.Schema({
     rankRewards: {
       total: { type: Number, required: true, min: 0 },
       ranks: [{
-        rank: { type: String, required: true, enum: ["1st Place","2nd Place","3rd Place","4th Place","5th Place"] },
+        rank: { type: String, required: true, enum: ["1st Place", "2nd Place", "3rd Place", "4th Place", "5th Place"] },
         amount: { type: Number, required: true, min: 0 },
       }],
     },
@@ -31,8 +31,8 @@ const matchSchema = new mongoose.Schema({
       customRewardsTotal: { type: Number, required: true, min: 0 },
     },
   },
-  status: { type: String, default: "upcoming", enum: ["upcoming","live","completed","cancelled"] },
-  
+  status: { type: String, default: "upcoming", enum: ["upcoming", "live", "completed", "cancelled"] },
+
   // Player Registrations
   registeredPlayers: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -45,7 +45,7 @@ const matchSchema = new mongoose.Schema({
     paymentReference: { type: String },
     status: { type: String, enum: ['registered', 'confirmed', 'cancelled'], default: 'registered' }
   }],
-  
+
   // Match Results
   results: {
     isCompleted: { type: Boolean, default: false },
@@ -77,7 +77,7 @@ const matchSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Validate distribution & timestamps
-matchSchema.pre("save", function(next) {
+matchSchema.pre("save", function (next) {
   this.updatedAt = Date.now();
 
   const rankRewardsTotal = (this.prizeDistribution.rankRewards.ranks || [])
@@ -101,5 +101,11 @@ matchSchema.pre("save", function(next) {
 
   next();
 });
+
+// Indexes for efficient queries
+matchSchema.index({ status: 1 });
+matchSchema.index({ startTime: 1 });
+matchSchema.index({ "registeredPlayers.userId": 1 });
+matchSchema.index({ "registeredPlayers.status": 1 });
 
 module.exports = mongoose.model("Match", matchSchema);

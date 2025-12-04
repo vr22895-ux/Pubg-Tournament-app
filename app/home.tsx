@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import axios from "axios";
-import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
+import { matchService } from "./services/matchService";
+import { walletService } from "./services/walletService";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Bell, Clock, Crown, Eye, Gamepad2, Home, IndianRupee, Share2, Target,
-  Timer, Trophy, Users, Wallet, LogOut, CheckCircle,
+  Timer, Trophy, Users, Wallet, LogOut, Settings,
 } from "lucide-react";
 
 // -------- Screen Router Type --------
@@ -23,9 +24,6 @@ export type Screen =
   | "live"
   | "settings"
   | "profile";
-
-// -------- API base (web dev) --------
-const API_BASE = "http://localhost:5050/api";
 
 // -------- Types (mirror your schema) --------
 type MapName = "Erangel" | "Sanhok" | "Miramar" | "Vikendi";
@@ -76,12 +74,8 @@ type UserStats = {
 
 // -------- Helpers --------
 async function listMatches(): Promise<MatchDoc[]> {
-  const res = await axios.get(`${API_BASE}/matches`, {
-    headers: { "Content-Type": "application/json" },
-    withCredentials: false,
-  });
-  // If your controller returns { success, data }, extract .data; else return res.data
-  return (res.data?.data ?? res.data) as MatchDoc[];
+  const response = await matchService.getAllMatches();
+  return (response?.data ?? response) as MatchDoc[];
 }
 
 async function getUserStats(): Promise<UserStats> {
@@ -94,9 +88,9 @@ async function getUserStats(): Promise<UserStats> {
     // Get wallet balance
     let walletBalance = 0;
     try {
-      const walletResponse = await axios.get(`${API_BASE}/wallet/balance/${user._id}`);
-      if (walletResponse.data?.success) {
-        walletBalance = walletResponse.data.data.balance || 0;
+      const walletResponse = await walletService.getBalance(user._id);
+      if (walletResponse?.success) {
+        walletBalance = walletResponse.data.balance || 0;
       }
     } catch (walletError) {
       console.log("Wallet not found, using default balance");
@@ -145,7 +139,6 @@ export default function HomeScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchDoc[]>([]);
-  const [myMatches, setMyMatches] = useState<MatchDoc[]>([]);
   const [userStats, setUserStats] = useState<UserStats>({
     totalMatches: 0,
     matchesWon: 0,
@@ -217,11 +210,9 @@ export default function HomeScreen({
 
       // Call the join match endpoint
       // The backend handles wallet deduction and registration atomically
-      const response = await axios.post(`${API_BASE}/matches/${matchId}/join`, {
-        userId: user._id
-      });
+      const response = await matchService.joinMatch(matchId, { userId: user._id });
 
-      if (response.data?.success) {
+      if (response?.success) {
         alert(`Successfully joined ${matchName}! Entry fee of ₹${entryFee} deducted from wallet.`);
 
         // Refresh data
@@ -239,7 +230,7 @@ export default function HomeScreen({
         setMatches(withDerived);
         setUserStats(statsData);
       } else {
-        alert(response.data?.error || "Failed to join match");
+        alert(response?.error || "Failed to join match");
       }
     } catch (error: any) {
       console.error("Error joining match:", error);
@@ -499,6 +490,7 @@ export default function HomeScreen({
             { icon: Gamepad2, label: "Matches", screen: "matches" as const },
             { icon: Trophy, label: "Leaderboard", screen: "leaderboard" as const },
             { icon: Wallet, label: "Wallet", screen: "wallet" as const },
+            { icon: Settings, label: "Settings", screen: "settings" as const },
           ].map((item) => (
             <Button
               key={item.screen}

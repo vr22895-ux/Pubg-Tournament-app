@@ -477,13 +477,13 @@ exports.checkLoginEligibility = async (req, res) => {
 
 /**
  * PUT /api/auth/profile/update
- * body: { userId, name, email }
- * Updates user profile information (name and email)
+ * body: { userId, name, email, pubgId }
+ * Updates user profile information (name, email, pubgId)
  * Returns the updated user object.
  */
 exports.updateProfile = async (req, res) => {
   try {
-    const { userId, name, email } = req.body || {};
+    const { userId, name, email, pubgId } = req.body || {};
 
     if (!userId) return res.status(400).json({ success: false, error: 'User ID is required' });
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' });
@@ -500,15 +500,19 @@ exports.updateProfile = async (req, res) => {
       return res.status(409).json({ success: false, error: 'Email is already taken by another user' });
     }
 
+    const updateFields = {
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
+      updatedAt: new Date()
+    };
+
+    if (pubgId) {
+      updateFields.pubgId = String(pubgId).trim();
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      {
-        $set: {
-          name: String(name).trim(),
-          email: String(email).trim().toLowerCase(),
-          updatedAt: new Date()
-        }
-      },
+      { $set: updateFields },
       { new: true, runValidators: true }
     ).lean();
 

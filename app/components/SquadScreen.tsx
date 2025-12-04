@@ -1,30 +1,30 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { squadService } from "../services/squadService";
+import { invitationService } from "../services/invitationService";
+import { authService } from "../services/authService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Users, Crown, Shield, Plus, LogOut, UserPlus, Search, X, Edit, Trash2, Home, Gamepad2, Trophy, Wallet } from "lucide-react";
+import { Users, Crown, Shield, Plus, LogOut, UserPlus, Search, X, Edit, Trash2, Home, Gamepad2, Trophy, Wallet, Settings } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const API_BASE = "http://localhost:5050/api";
 
 export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => void; onNavigate?: (screen: "home" | "squad" | "wallet" | "matches" | "leaderboard" | "live" | "settings") => void }) {
   const [squad, setSquad] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateSquad, setShowCreateSquad] = useState(false);
   const [squadName, setSquadName] = useState("");
-  
+
   // Squad search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<"mySquad" | "findSquad">("mySquad");
-  
+
   // Squad management state
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -44,7 +44,6 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     try {
       const userStr = localStorage.getItem("user");
       const user = userStr ? JSON.parse(userStr) : null;
-      console.log('getCurrentUser called:', { userStr, user, userId: user?._id, userIdType: typeof user?._id });
       return user;
     } catch (error) {
       console.error('Error in getCurrentUser:', error);
@@ -57,51 +56,29 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) {
-        console.log('No current user found, cannot load squad');
         setLoading(false);
         return;
       }
-      
-      console.log('Loading squad for user:', currentUser._id);
-      
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE}/squads/my-squad`, {
-        headers: {Authorization: `Bearer ${token}` }
-      });
-      console.log('Squad response:', response.data);
-      
-      if (response.data.success) {
-        setSquad(response.data.data);
-        console.log('=== SQUAD LOADED ===');
-        console.log('Full squad data:', response.data.data);
-        console.log('Squad members:', response.data.data.members);
-        console.log('Squad leader:', response.data.data.leader);
-        console.log('Squad leader type:', typeof response.data.data.leader);
-        console.log('Current user ID:', currentUser._id);
-        console.log('Current user ID type:', typeof currentUser._id);
-        console.log('Leader comparison:', currentUser._id === response.data.data.leader);
-        console.log('Leader comparison (strict):', currentUser._id === response.data.data.leader);
-        console.log('Leader comparison (loose):', currentUser._id == response.data.data.leader);
+
+      const response = await squadService.getMySquad();
+
+      if (response.success) {
+        setSquad(response.data);
         // Initialize edit form
         setEditForm({
-          name: response.data.data.name,
-          maxMembers: response.data.data.maxMembers
+          name: response.data.name,
+          maxMembers: response.data.maxMembers
         });
       } else {
-        console.log('User not in squad or squad not found');
         if (!keepExistingOnError) {
           setSquad(null);
         }
       }
     } catch (error: any) {
       console.error('Error loading squad:', error);
-      console.error('Error response:', error.response?.data);
       // If keepExistingOnError is true, don't clear the squad data
-      // This prevents the squad from disappearing due to network issues
       if (!keepExistingOnError) {
         setSquad(null);
-      } else {
-        console.log('Keeping existing squad data due to error');
       }
     } finally {
       setLoading(false);
@@ -109,24 +86,20 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   };
 
   const createSquad = async () => {
+    if (!squadName.trim()) return;
+
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
-      
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE}/squads`, {
+
+      const response = await squadService.createSquad({
         name: squadName,
-        // leaderId removed. Server uses the token to get the leaderId
-        leaderName: currentUser.name,
-        leaderPubgId: currentUser.pubgId
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        leaderId: currentUser._id
       });
-      
-      if (response.data.success) {
-        setSquad(response.data.data);
+
+      if (response.success) {
+        setSquad(response.data);
         setShowCreateSquad(false);
-        setSquadName("");
         showToast("Squad created successfully!", "success");
       }
     } catch (error: any) {
@@ -134,140 +107,57 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     }
   };
 
-  const searchSquads = async () => {
-    if (!searchQuery.trim()) {
-      // If search is cleared, show all squads
-      loadAllSquads();
-      return;
-    }
-    
-    setSearching(true);
-    try {
-      const response = await axios.get(`${API_BASE}/squads?search=${encodeURIComponent(searchQuery)}`);
-      if (response.data.success) {
-        setSearchResults(response.data.data);
-      }
-    } catch (error: any) {
-      showToast("Failed to search squads", "error");
-    } finally {
-      setSearching(false);
-    }
-  };
-
   const joinSquad = async (squadId: string) => {
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
-      
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE}/squads/${squadId}/join-request`, {
-        // userId removed. Server uses the token to get the userId
-        userName: currentUser.name,
-        userPubgId: currentUser.pubgId
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data.success) {
-        showToast(response.data.message || "Join request sent successfully!", "success");
-        // Refresh the squad list to show updated status
+
+      const response = await squadService.joinSquad(squadId);
+
+      if (response.success) {
+        showToast("Join request sent successfully!", "success");
+        // Refresh squad list to show updated status if needed
         loadAllSquads();
       }
     } catch (error: any) {
-      showToast(error.response?.data?.error || "Failed to send join request", "error");
+      showToast(error.response?.data?.error || "Failed to join squad", "error");
     }
   };
 
   const leaveSquad = async () => {
     if (!squad) return;
-    
+
     if (!confirm("Are you sure you want to leave this squad?")) return;
-    
+
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
-      
-      if (squad.leader.toString() === currentUser._id) {
-        // Leader can't leave, must delete squad
-        if (confirm("As the leader, leaving will delete the squad. Continue?")) {
-          const token = localStorage.getItem('token');
-          await axios.delete(`${API_BASE}/squads/${squad._id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          showToast("Squad deleted", "success");
-          setSquad(null);
-        }
-      } else {
-        // Regular member can leave using the leave endpoint
-        const token = localStorage.getItem('token');
-        await axios.post(`${API_BASE}/squads/${squad._id}/leave`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        showToast("Left squad successfully", "success");
+
+      const response = await squadService.leaveSquad(squad._id);
+
+      if (response.success) {
         setSquad(null);
+        showToast("Left squad successfully", "success");
       }
     } catch (error: any) {
       showToast(error.response?.data?.error || "Failed to leave squad", "error");
     }
   };
 
-  const updateSquad = async () => {
+  const deleteSquad = async () => {
     if (!squad) return;
-    
-    try {
-      const response = await axios.put(`${API_BASE}/squads/${squad._id}`, editForm);
-      if (response.data.success) {
-        setSquad(response.data.data);
-        setShowEditSquad(false);
-        showToast("Squad updated successfully!", "success");
-      }
-    } catch (error: any) {
-      showToast(error.response?.data?.error || "Failed to update squad", "error");
-    }
-  };
 
-  const removeMember = async (memberId: string) => {
-    if (!squad) return;
-    
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      showToast("User not authenticated", "error");
-      return;
-    }
-    
-    console.log('=== REMOVE MEMBER DEBUG ===');
-    console.log('Member ID to remove:', memberId);
-    console.log('Squad ID:', squad._id);
-    console.log('Current user:', currentUser);
-    console.log('Squad leader:', squad.leader);
-    console.log('Is current user leader?', currentUser._id === squad.leader);
-    console.log('Current squad members:', squad.members);
-    
-    if (!confirm("Are you sure you want to remove this member?")) return;
-    
+    if (!confirm("Are you sure you want to delete this squad? This action cannot be undone.")) return;
+
     try {
-      const token = localStorage.getItem('token');
-      console.log('Making DELETE request to:', `${API_BASE}/squads/${squad._id}/members/${memberId}`);
-      const response = await axios.delete(`${API_BASE}/squads/${squad._id}/members/${memberId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('Remove member response:', response.data);
-      
-      if (response.data.success) {
-        showToast("Member removed successfully", "success");
-        
-        console.log('Reloading squad data...');
-        // Reload the squad data to get the updated member list
-        // Use keepExistingOnError=true to prevent squad from disappearing if refresh fails
-        await loadSquad(true);
-        console.log('Squad data reloaded');
-      } else {
-        showToast(response.data.error || "Failed to remove member", "error");
+      const response = await squadService.deleteSquad(squad._id);
+
+      if (response.success) {
+        setSquad(null);
+        showToast("Squad deleted successfully", "success");
       }
     } catch (error: any) {
-      console.error('Remove member error:', error);
-      console.error('Error response:', error.response?.data);
-      showToast(error.response?.data?.error || "Failed to remove member", "error");
+      showToast(error.response?.data?.error || "Failed to delete squad", "error");
     }
   };
 
@@ -277,14 +167,14 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
 
   // Load pending invitations
   const loadPendingInvitations = async () => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return;
-
     setInvitationsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/invitations/user/${currentUser._id}`);
-      if (response.data?.success) {
-        setPendingInvitations(response.data.data);
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
+
+      const response = await invitationService.getUserInvitations(currentUser._id);
+      if (response.success) {
+        setPendingInvitations(response.data);
       }
     } catch (error) {
       console.error("Failed to load invitations:", error);
@@ -293,18 +183,18 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     }
   };
 
-  // Load join requests for squad leaders
+  // Load join requests (for squad leader)
   const loadJoinRequests = async () => {
     if (!squad) return;
-    
+
     const currentUser = getCurrentUser();
     if (!currentUser || currentUser._id !== squad.leader) return;
-    
+
     setJoinRequestsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/invitations/squad/${squad._id}?type=join_request&status=pending`);
-      if (response.data?.success) {
-        setJoinRequests(response.data.data);
+      const response = await invitationService.getSquadJoinRequests(squad._id);
+      if (response.success) {
+        setJoinRequests(response.data);
       }
     } catch (error) {
       console.error("Failed to load join requests:", error);
@@ -316,16 +206,8 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   // Accept invitation
   const acceptInvitation = async (invitationId: string) => {
     try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        showToast("User not authenticated", "error");
-        return;
-      }
-      
-      const response = await axios.post(`${API_BASE}/invitations/${invitationId}/accept`, {
-        userId: currentUser._id // Add current user ID for authentication
-      });
-      if (response.data?.success) {
+      const response = await invitationService.acceptInvitation(invitationId);
+      if (response.success) {
         // Remove the accepted invitation from the list
         setPendingInvitations(prev => prev.filter(inv => inv._id !== invitationId));
         // Show success message
@@ -341,16 +223,8 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   // Decline invitation
   const declineInvitation = async (invitationId: string) => {
     try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        showToast("User not authenticated", "error");
-        return;
-      }
-      
-      const response = await axios.post(`${API_BASE}/invitations/${invitationId}/decline`, {
-        userId: currentUser._id // Add current user ID for authentication
-      });
-      if (response.data?.success) {
+      const response = await invitationService.declineInvitation(invitationId);
+      if (response.success) {
         // Remove the declined invitation from the list
         setPendingInvitations(prev => prev.filter(inv => inv._id !== invitationId));
         // Show success message
@@ -364,14 +238,8 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   // Accept join request (squad leader)
   const acceptJoinRequest = async (invitationId: string) => {
     try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        showToast("User not authenticated", "error");
-        return;
-      }
-      
-      const response = await axios.post(`${API_BASE}/invitations/${invitationId}/accept-join`);
-      if (response.data?.success) {
+      const response = await invitationService.acceptJoinRequest(invitationId);
+      if (response.success) {
         showToast("Join request accepted!", "success");
         // Remove the accepted request from the list
         setJoinRequests(prev => prev.filter(req => req._id !== invitationId));
@@ -386,14 +254,8 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   // Decline join request (squad leader)
   const declineJoinRequest = async (invitationId: string) => {
     try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        showToast("User not authenticated", "error");
-        return;
-      }
-      
-      const response = await axios.post(`${API_BASE}/invitations/${invitationId}/decline-join`);
-      if (response.data?.success) {
+      const response = await invitationService.declineJoinRequest(invitationId);
+      if (response.success) {
         showToast("Join request declined", "success");
         // Remove the declined request from the list
         setJoinRequests(prev => prev.filter(req => req._id !== invitationId));
@@ -406,9 +268,7 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   // Invite player to squad
   const invitePlayer = async () => {
     if (!squad || !selectedPlayer) return;
-    
-    console.log('Inviting player:', { squad, selectedPlayer });
-    
+
     setInviting(true);
     try {
       const currentUser = getCurrentUser();
@@ -416,28 +276,23 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
         showToast("User not authenticated", "error");
         return;
       }
-      
+
       const invitationData = {
         squadId: squad._id,
         invitedUserId: selectedPlayer._id,
         userId: currentUser._id, // Add current user ID for authentication
         message: `You've been invited to join ${squad.name}!`
       };
-      
-      console.log('Sending invitation with data:', invitationData);
-      
+
       // Send invitation
-      const inviteResponse = await axios.post(`${API_BASE}/invitations/send`, invitationData);
-      
-      console.log('Invitation response:', inviteResponse.data);
-      
-      if (inviteResponse.data?.success) {
+      const inviteResponse = await invitationService.sendInvitation(invitationData);
+
+      if (inviteResponse.success) {
         showToast("Invitation sent successfully!", "success");
         setShowInviteDialog(false);
         setSelectedPlayer(null);
       }
     } catch (error: any) {
-      console.error('Invitation error:', error);
       showToast(error.response?.data?.error || "Failed to send invitation", "error");
     } finally {
       setInviting(false);
@@ -450,17 +305,13 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
       setAvailablePlayers([]);
       return;
     }
-    
-    console.log('Searching for players with query:', playerSearch);
-    console.log('Making API call to:', `${API_BASE}/auth/players?search=${encodeURIComponent(playerSearch)}`);
+
     setPlayersLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/auth/players?search=${encodeURIComponent(playerSearch)}`);
-      console.log('Player search response:', response.data);
-      
-      if (response.data.success) {
-        setAvailablePlayers(response.data.data);
-        console.log('Available players set:', response.data.data);
+      const response = await authService.getAvailablePlayers({ search: playerSearch });
+
+      if (response.success) {
+        setAvailablePlayers(response.data);
       }
     } catch (error) {
       console.error("Failed to search players:", error);
@@ -472,15 +323,11 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
 
   // Load all available players
   const loadAllPlayers = async () => {
-    console.log('loadAllPlayers called');
     setPlayersLoading(true);
     try {
-      console.log('Making API call to:', `${API_BASE}/auth/players?limit=50`);
-      const response = await axios.get(`${API_BASE}/auth/players?limit=50`);
-      console.log('loadAllPlayers response:', response.data);
-      if (response.data?.success) {
-        setAvailablePlayers(response.data.data);
-        console.log('Available players set:', response.data.data);
+      const response = await authService.getAvailablePlayers({ limit: 50 });
+      if (response.success) {
+        setAvailablePlayers(response.data);
       }
     } catch (error) {
       console.error("Failed to load players:", error);
@@ -494,13 +341,10 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
   const loadAllSquads = async () => {
     setSearching(true);
     try {
-      console.log('Loading all available squads...');
-      const response = await axios.get(`${API_BASE}/squads?limit=50`);
-      console.log('All squads response:', response.data);
-      
-      if (response.data.success) {
-        setSearchResults(response.data.data);
-        console.log('All squads loaded:', response.data.data.length, 'squads');
+      const response = await squadService.getSquads({ limit: 50 });
+
+      if (response.success) {
+        setSearchResults(response.data);
       }
     } catch (error: any) {
       console.error("Failed to load all squads:", error);
@@ -515,13 +359,13 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
     if (!searchQuery.trim()) {
       return searchResults; // Show all squads when no search query
     }
-    
+
     const query = searchQuery.toLowerCase();
-    return searchResults.filter(squad => 
+    return searchResults.filter(squad =>
       squad.name?.toLowerCase().includes(query) ||
       squad.leader?.name?.toLowerCase().includes(query) ||
       squad.leader?.pubgId?.toLowerCase().includes(query) ||
-      squad.members?.some((member: any) => 
+      squad.members?.some((member: any) =>
         member.name?.toLowerCase().includes(query) ||
         member.pubgId?.toLowerCase().includes(query)
       )
@@ -598,41 +442,82 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-400" />
+                    <UserPlus className="w-5 h-5 text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-blue-400">Squad Invitations</h3>
-                    <p className="text-sm text-blue-300">
-                      You have {pendingInvitations.length} pending squad invitation{pendingInvitations.length > 1 ? 's' : ''}
-                    </p>
+                    <h3 className="font-medium text-blue-400">Pending Invitations</h3>
+                    <p className="text-sm text-gray-400">You have {pendingInvitations.length} pending squad invitations</p>
                   </div>
                 </div>
               </div>
-              
-              {/* Invitation list */}
-              <div className="space-y-2">
+
+              <div className="space-y-2 mt-2">
                 {pendingInvitations.map((invitation) => (
-                  <div key={invitation._id} className="flex items-center justify-between p-3 bg-blue-500/5 rounded border border-blue-500/20">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-blue-300">{invitation.squadName}</h4>
-                      <p className="text-xs text-blue-400">Invited by: {invitation.invitedByName}</p>
-                      {invitation.message && (
-                        <p className="text-xs text-blue-300 mt-1">"{invitation.message}"</p>
-                      )}
+                  <div key={invitation._id} className="bg-black/40 rounded p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{invitation.squadName || invitation.squadId?.name}</p>
+                      <p className="text-xs text-gray-400">Invited by: {invitation.invitedByName}</p>
                     </div>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
+                        className="bg-green-500 hover:bg-green-600 text-black h-8"
                         onClick={() => acceptInvitation(invitation._id)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1"
                       >
                         Accept
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/10 h-8"
                         onClick={() => declineInvitation(invitation._id)}
-                        className="border-red-500/50 text-red-400 bg-transparent hover:bg-red-500/10 text-xs px-2 py-1"
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Join Requests (for Squad Leader) */}
+        {joinRequests.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-yellow-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-yellow-400">Join Requests</h3>
+                    <p className="text-sm text-gray-400">You have {joinRequests.length} pending join requests</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 mt-2">
+                {joinRequests.map((request) => (
+                  <div key={request._id} className="bg-black/40 rounded p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{request.invitedUserId?.name || 'Unknown User'}</p>
+                      <p className="text-xs text-gray-400">PUBG ID: {request.invitedUserId?.pubgId || 'N/A'}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        className="bg-green-500 hover:bg-green-600 text-black h-8"
+                        onClick={() => acceptJoinRequest(request._id)}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/10 h-8"
+                        onClick={() => declineJoinRequest(request._id)}
                       >
                         Decline
                       </Button>
@@ -645,493 +530,276 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
         )}
 
         {/* Main Content */}
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "mySquad" | "findSquad")} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-900 border-green-500/20">
-            <TabsTrigger value="mySquad" className="data-[state=active]:bg-green-500 data-[state=active]:text-black">
-              My Squad
-            </TabsTrigger>
-            <TabsTrigger value="findSquad" className="data-[state=active]:bg-green-500 data-[state=active]:text-black">
-              Find Squad
-            </TabsTrigger>
-          </TabsList>
+        {!squad ? (
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "mySquad" | "findSquad")} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 bg-gray-900 border-green-500/20">
+              <TabsTrigger value="mySquad" className="data-[state=active]:bg-green-500 data-[state=active]:text-black">
+                Create Squad
+              </TabsTrigger>
+              <TabsTrigger value="findSquad" className="data-[state=active]:bg-green-500 data-[state=active]:text-black">
+                Find Squad
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="mySquad" className="space-y-6 mt-4">
-            {!squad ? (
-              <Card className="bg-gray-900 border-green-500/20">
-                <CardHeader>
-                  <CardTitle className="text-green-400 text-center">No Squad Found</CardTitle>
-                </CardHeader>
-                <CardContent className="text-center space-y-4">
-                  <p className="text-gray-400">Create your own squad to start playing together.</p>
+            <TabsContent value="mySquad" className="mt-6">
+              <Card className="bg-gray-900 border-green-500/20 text-center py-12">
+                <CardContent className="space-y-6">
+                  <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto">
+                    <Users className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">No Squad Found</h3>
+                    <p className="text-gray-400 max-w-xs mx-auto">
+                      You haven't joined or created a squad yet. Create one to compete in tournaments with your friends!
+                    </p>
+                  </div>
                   <Button
                     className="bg-green-500 hover:bg-green-600 text-black"
                     onClick={() => setShowCreateSquad(true)}
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Create Squad
+                    Create New Squad
                   </Button>
                 </CardContent>
               </Card>
-            ) : (
-              <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/30">
-                <CardHeader>
-                  <CardTitle className="text-green-400 flex items-center justify-between">
-                    <span className="flex items-center">
-                      <Shield className="w-5 h-5 mr-2" />
-                      {squad.name}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                        <Crown className="w-3 h-3 mr-1" />
-                        Rank #{squad.stats?.rank || 'Unranked'}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowEditSquad(true)}
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                    </div>
+            </TabsContent>
+
+            <TabsContent value="findSquad" className="mt-6 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                <Input
+                  placeholder="Search squads by name, leader, or member..."
+                  className="pl-10 bg-gray-900 border-gray-700 text-white"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {searching ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">Searching squads...</p>
+                </div>
+              ) : displaySquads.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {displaySquads.map((s) => (
+                    <Card key={s._id} className="bg-gray-900 border-gray-800 hover:border-green-500/50 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="font-bold text-lg text-white">{s.name}</h3>
+                            <p className="text-sm text-gray-400 flex items-center mt-1">
+                              <Crown className="w-3 h-3 text-yellow-500 mr-1" />
+                              Leader: {s.leader?.name || 'Unknown'}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="bg-gray-800 text-gray-300">
+                            {s.members?.length || 0}/{s.maxMembers || 4} Members
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {s.members?.map((member: any, i: number) => (
+                              <div key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-black bg-gray-700 flex items-center justify-center text-xs font-medium text-white" title={member.name}>
+                                {member.name?.charAt(0).toUpperCase()}
+                              </div>
+                            ))}
+                          </div>
+
+                          <Button
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={s.members?.length >= s.maxMembers}
+                            onClick={() => joinSquad(s._id)}
+                          >
+                            {s.members?.length >= s.maxMembers ? 'Squad Full' : 'Request to Join'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-gray-900 rounded-lg border border-gray-800">
+                  <p className="text-gray-400">No squads found matching your search.</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="space-y-6">
+            {/* Squad Details Card */}
+            <Card className="bg-gradient-to-br from-gray-900 to-black border-green-500/30">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle className="text-2xl font-bold text-green-400 flex items-center">
+                    <Shield className="w-6 h-6 mr-2" />
+                    {squad.name}
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-400">{squad.stats?.matchesWon || 0}</p>
-                      <p className="text-sm text-gray-400">Matches Won</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-red-400">{squad.stats?.totalKills || 0}</p>
-                      <p className="text-sm text-gray-400">Total Kills</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    {squad.members.map((member: any, index: number) => (
-                      <div key={index} className="text-center">
-                        <div className="relative">
-                          <Avatar className="w-16 h-16 mx-auto mb-2 border-2 border-green-500/30">
-                            <AvatarFallback className="bg-gray-800 text-green-400">
-                              {(member.name && member.name.length > 0) ? member.name[0] : 
-                               (member.userId && member.userId.name && member.userId.name.length > 0) ? member.userId.name[0] :
-                               (member.pubgId && member.pubgId.length > 0) ? member.pubgId[0] :
-                               (member.userId && member.userId.pubgId && member.userId.pubgId.length > 0) ? member.userId.pubgId[0] : '?'}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-black bg-green-500" />
-                          {member.role === 'leader' && (
-                            <Crown className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 text-yellow-400" />
-                          )}
-                          {(() => {
-                            const currentUserId = getCurrentUser()?._id;
-                            const squadLeaderId = squad.leader;
-                            const isCurrentUserLeader = currentUserId === squadLeaderId;
-                            const isNotLeader = member.role !== 'leader';
-                            
-                            console.log('Member removal button debug:', {
-                              memberName: member.name || member.userId?.name,
-                              memberRole: member.role,
-                              currentUserId: currentUserId,
-                              squadLeaderId: squadLeaderId,
-                              currentUserIdType: typeof currentUserId,
-                              squadLeaderIdType: typeof squadLeaderId,
-                              isCurrentUserLeader,
-                              isNotLeader,
-                              shouldShowButton: isCurrentUserLeader && isNotLeader
-                            });
-                            
-                            return isCurrentUserLeader && isNotLeader ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="absolute -top-2 -right-2 w-6 h-6 p-0 bg-red-500 hover:bg-red-600 text-white"
-                                onClick={() => removeMember(member.userId._id || member.userId)}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            ) : null;
-                          })()}
-                        </div>
-                        <p className="text-sm font-medium">{member.name || (member.userId && member.userId.name) || 'Unknown Player'}</p>
-                        <p className="text-xs text-green-400">{member.pubgId || (member.userId && member.userId.pubgId) || 'No PUBG ID'}</p>
-                        <Badge className="text-xs mt-1" variant={member.role === 'leader' ? 'default' : 'secondary'}>
-                          {member.role}
-                        </Badge>
-                      </div>
-                    ))}
-                    
-                    {Array.from({ length: squad.maxMembers - squad.members.length }).map((_, index) => (
-                      <div key={`empty-${index}`} className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-2 border-2 border-dashed border-gray-600 rounded-full flex items-center justify-center">
-                          <Plus className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <p className="text-sm text-gray-500">Empty Slot</p>
-                      </div>
-                    ))}
-                  </div>
-
+                  <p className="text-sm text-gray-400 mt-1">
+                    Squad ID: {squad._id}
+                  </p>
+                </div>
+                {squad.leader === getCurrentUser()?._id && (
                   <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      className="border-red-500/50 text-red-400 bg-transparent hover:bg-red-500/10"
-                      onClick={leaveSquad}
-                    >
-                      Leave Squad
-                    </Button>
-                    <Button
-                      className="bg-blue-500 hover:bg-blue-600 text-white"
-                      onClick={() => {
-                        console.log('Invite Player button clicked');
-                        console.log('Current squad:', squad);
-                        setShowInviteDialog(true);
-                        console.log('Loading all players...');
-                        loadAllPlayers(); // Load all players when dialog opens
-                      }}
-                    >
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Invite Player
+                    <Button variant="outline" size="sm" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={deleteSquad}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="findSquad" className="space-y-6 mt-4">
-            <Card className="bg-gray-900 border-green-500/20">
-              <CardHeader>
-                <CardTitle className="text-green-400 flex items-center justify-between">
-                  <span>Available Squads to Join</span>
-                  <Button
-                    size="sm"
-                    onClick={loadAllSquads}
-                    disabled={searching}
-                    className="bg-green-500 hover:bg-green-600 text-black"
-                  >
-                    <Search className="w-4 h-4 mr-2" />
-                    {searching ? 'Loading...' : 'Refresh'}
-                  </Button>
-                </CardTitle>
+                )}
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex space-x-2">
-                  <Input
-                    placeholder="Search squads by name, member, or PUBG ID..."
-                    className="bg-black border-gray-700 text-white flex-1"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && searchSquads()}
-                  />
-                  <Button
-                    onClick={searchSquads}
-                    disabled={!searchQuery.trim() || searching}
-                    className="bg-green-500 hover:bg-green-600 text-black"
-                  >
-                    <Search className="w-4 h-4 mr-2" />
-                    {searching ? 'Searching...' : 'Search'}
-                  </Button>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Members</p>
+                    <p className="text-xl font-bold text-white">{squad.members?.length || 0} / {squad.maxMembers || 4}</p>
+                  </div>
+                  <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Created</p>
+                    <p className="text-xl font-bold text-white">{new Date(squad.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Status</p>
+                    <Badge className="bg-green-500/20 text-green-400 border-green-500/30 mt-1">Active</Badge>
+                  </div>
                 </div>
 
-                {/* Show all squads by default */}
-                {displaySquads.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-400">
-                        {searchQuery.trim() ? 'Search Results' : 'All Available Squads'}
-                      </h3>
-                      <span className="text-xs text-gray-500">
-                        {displaySquads.length} squad{displaySquads.length !== 1 ? 's' : ''}
-                        {searchQuery.trim() && displaySquads.length !== searchResults.length && (
-                          <span className="text-gray-600"> of {searchResults.length}</span>
-                        )}
-                      </span>
-                    </div>
-                    
-                    {displaySquads.map((squad) => (
-                      <Card key={squad._id} className="bg-gray-800 border-gray-700 hover:border-green-500/30 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-3 mb-2">
-                                <h4 className="font-medium text-green-400 text-lg">{squad.name}</h4>
-                                <Badge variant={squad.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                                  {squad.status}
-                                </Badge>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <p className="text-gray-400">
-                                    <Users className="w-4 h-4 inline mr-1" />
-                                    {squad.members?.length || 0}/{squad.maxMembers || 4} members
-                                  </p>
-                                  <p className="text-gray-500 text-xs">
-                                    {squad.maxMembers - (squad.members?.length || 0)} slot{squad.maxMembers - (squad.members?.length || 0) !== 1 ? 's' : ''} available
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-400">
-                                    <Crown className="w-4 h-4 inline mr-1" />
-                                    Leader: {squad.leader?.name || 'Unknown'}
-                                  </p>
-                                  <p className="text-gray-500 text-xs">
-                                    {squad.leader?.pubgId || 'No PUBG ID'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-col space-y-2 ml-4">
-                              <Button
-                                size="sm"
-                                onClick={() => joinSquad(squad._id)}
-                                className="bg-blue-500 hover:bg-blue-600 text-white"
-                                disabled={!squad.leader || squad.status !== 'active'}
-                              >
-                                Request to Join
-                              </Button>
-                              {squad.status !== 'active' && (
-                                <p className="text-xs text-red-400 text-center">Squad Inactive</p>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {/* Show message when no squads found */}
-                {displaySquads.length === 0 && !searching && (
-                  <div className="text-center text-gray-400 py-8">
-                    {searchQuery.trim() ? (
-                      <>
-                        <p>No squads found matching "{searchQuery}"</p>
-                        <p className="text-sm mt-2">Try a different search term or check all available squads</p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={loadAllSquads}
-                          className="mt-3"
-                        >
-                          Show All Squads
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <p>No squads available at the moment</p>
-                        <p className="text-sm mt-2">Check back later or create your own squad</p>
-                      </>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Squad Members</h3>
+                    {(squad.leader?._id === getCurrentUser()?._id || squad.leader === getCurrentUser()?._id) && squad.members?.length < squad.maxMembers && (
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => {
+                          setShowInviteDialog(true);
+                          loadAllPlayers();
+                        }}
+                      >
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Invite Player
+                      </Button>
                     )}
                   </div>
-                )}
 
-                {/* Loading state */}
-                {searching && (
-                  <div className="text-center text-gray-400 py-8">
-                    <p>Loading squads...</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {squad.members?.map((member: any) => (
+                      <div key={member._id} className="flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-700">
+                        <div className="flex items-center space-x-3">
+                          <Avatar className="h-10 w-10 border border-gray-600">
+                            <AvatarFallback className="bg-gray-700 text-green-400 font-bold">
+                              {member.name?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-white flex items-center">
+                              {member.name}
+                              {(squad.leader?._id === member.userId?._id || squad.leader === member.userId) && (
+                                <Crown className="w-3 h-3 text-yellow-500 ml-2" />
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-400">ID: {member.pubgId || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        {(member.userId?._id === getCurrentUser()?._id || member.userId === getCurrentUser()?._id) ? (
+                          <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={leaveSquad}>
+                            <LogOut className="w-4 h-4 mr-2" />
+                            Leave
+                          </Button>
+                        ) : (
+                          (squad.leader?._id === getCurrentUser()?._id || squad.leader === getCurrentUser()?._id) && (
+                            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-900/20">
+                              Kick
+                            </Button>
+                          )
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
 
       {/* Create Squad Dialog */}
       <Dialog open={showCreateSquad} onOpenChange={setShowCreateSquad}>
-        <DialogContent className="bg-gray-900 border-green-500/30">
+        <DialogContent className="bg-gray-900 border-green-500/30 text-white">
           <DialogHeader>
-            <DialogTitle className="text-green-400">Create New Squad</DialogTitle>
+            <DialogTitle>Create New Squad</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="Squad name..."
-              className="bg-black border-gray-700 text-white"
-              value={squadName}
-              onChange={(e) => setSquadName(e.target.value)}
-            />
-            <div className="flex space-x-2">
-              <Button variant="outline" onClick={() => setShowCreateSquad(false)}>
-                Cancel
-              </Button>
-              <Button onClick={createSquad} disabled={!squadName.trim()}>
-                Create Squad
-              </Button>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Squad Name</label>
+              <Input
+                placeholder="Enter squad name"
+                className="bg-black border-gray-700 text-white"
+                value={squadName}
+                onChange={(e) => setSquadName(e.target.value)}
+              />
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Squad Dialog */}
-      <Dialog open={showEditSquad} onOpenChange={setShowEditSquad}>
-        <DialogContent className="bg-gray-900 border-green-500/30">
-          <DialogHeader>
-            <DialogTitle className="text-green-400">Edit Squad</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="Squad name..."
-              className="bg-black border-gray-700 text-white"
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-            />
-            <div className="flex space-x-2">
-              <Button variant="outline" onClick={() => setShowEditSquad(false)}>
-                Cancel
-              </Button>
-              <Button onClick={updateSquad} disabled={!editForm.name.trim()}>
-                Update Squad
-              </Button>
-            </div>
+            <Button
+              className="w-full bg-green-500 hover:bg-green-600 text-black"
+              onClick={createSquad}
+              disabled={!squadName.trim()}
+            >
+              Create Squad
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Invite Player Dialog */}
-      <Dialog open={showInviteDialog} onOpenChange={(open) => {
-        console.log('Invite dialog open state changed:', open);
-        setShowInviteDialog(open);
-        if (!open) {
-          setSelectedPlayer(null);
-          setPlayerSearch("");
-          setAvailablePlayers([]);
-        }
-      }}>
-        <DialogContent className="bg-gray-900 border-green-500/30">
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="bg-gray-900 border-green-500/30 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-green-400">Invite Player to Squad</DialogTitle>
+            <DialogTitle>Invite Player to Squad</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-4">
-              <div className="flex space-x-2">
-                <Input
-                  placeholder="Search for players by name, email, or PUBG ID..."
-                  className="bg-black border-gray-700 text-white flex-1"
-                  value={playerSearch}
-                  onChange={(e) => setPlayerSearch(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && searchPlayers()}
-                />
-                <Button 
-                  onClick={() => {
-                    console.log('Search button clicked, playerSearch:', playerSearch);
-                    searchPlayers();
-                  }} 
-                  disabled={!playerSearch.trim() || playersLoading}
-                  size="sm"
-                >
-                  {playersLoading ? 'Searching...' : 'Search'}
-                </Button>
-              </div>
-              
-              {selectedPlayer && (
-                <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Avatar className="w-8 h-8 mr-2">
-                        <AvatarFallback className="bg-green-800 text-green-400">
-                          {selectedPlayer.name && selectedPlayer.name.length > 0 ? selectedPlayer.name[0] : selectedPlayer.pubgId ? selectedPlayer.pubgId[0] : '?'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-green-400">{selectedPlayer.name || 'Unknown Player'}</p>
-                        <p className="text-xs text-green-300">{selectedPlayer.pubgId || 'No PUBG ID'}</p>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedPlayer(null)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-              
-              {!selectedPlayer && (
-                <>
-                  {playersLoading ? (
-                    <div className="text-center py-4">
-                      <p className="text-gray-400">Searching for players...</p>
-                    </div>
-                  ) : availablePlayers.length === 0 && playerSearch.trim() ? (
-                    <div className="text-center py-4 text-gray-400">
-                      <p>No players found matching "{playerSearch}"</p>
-                      <p className="text-sm">Try a different search term</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={loadAllPlayers}
-                        className="mt-2"
-                      >
-                        Show All Players
-                      </Button>
-                    </div>
-                  ) : availablePlayers.length > 0 ? (
-                    <div className="max-h-48 overflow-y-auto space-y-2">
-                      {availablePlayers.map((player) => (
-                        <div
-                          key={player._id}
-                          className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${
-                            selectedPlayer?._id === player._id 
-                              ? 'bg-green-500/20 border border-green-500/30' 
-                              : 'hover:bg-gray-800'
-                          }`}
-                          onClick={() => {
-                            console.log('Player selected:', player);
-                            setSelectedPlayer(player);
-                          }}
-                        >
-                          <div className="flex items-center">
-                            <Avatar className="w-8 h-8 mr-2">
-                              <AvatarFallback className="bg-gray-800 text-gray-400">
-                                {player.name && player.name.length > 0 ? player.name[0] : player.pubgId ? player.pubgId[0] : '?'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-sm text-gray-300">{player.name || 'Unknown Player'}</p>
-                              <p className="text-xs text-gray-400">{player.email || 'No email'}</p>
-                            </div>
-                          </div>
-                          <Badge variant="secondary" className="text-xs">
-                            {player.pubgId}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-gray-400">
-                      <p>Search for players to invite</p>
-                      <p className="text-sm">Enter a name, email, or PUBG ID</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={loadAllPlayers}
-                        className="mt-2"
-                      >
-                        Show All Players
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-              
-              <div className="flex space-x-2">
-                <Button variant="outline" onClick={() => {
-                  setShowInviteDialog(false);
-                  setSelectedPlayer(null);
-                  setPlayerSearch("");
-                  setAvailablePlayers([]);
-                }}>
-                  Cancel
-                </Button>
-                <Button onClick={invitePlayer} disabled={!selectedPlayer || inviting}>
-                  {inviting ? 'Inviting...' : 'Send Invite'}
-                </Button>
-              </div>
+          <div className="space-y-4 py-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <Input
+                placeholder="Search player by name or PUBG ID"
+                className="pl-10 bg-black border-gray-700 text-white"
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+              />
             </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+              {playersLoading ? (
+                <p className="text-center text-gray-400 py-4">Loading players...</p>
+              ) : availablePlayers.length > 0 ? (
+                availablePlayers.map((player) => (
+                  <div
+                    key={player._id}
+                    className={`flex items-center justify-between p-3 rounded cursor-pointer transition-colors ${selectedPlayer?._id === player._id ? 'bg-green-500/20 border border-green-500/50' : 'bg-gray-800 hover:bg-gray-700'
+                      }`}
+                    onClick={() => setSelectedPlayer(player)}
+                  >
+                    <div>
+                      <p className="font-medium text-white">{player.name}</p>
+                      <p className="text-xs text-gray-400">ID: {player.pubgId}</p>
+                    </div>
+                    {selectedPlayer?._id === player._id && (
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-400 py-4">No players found</p>
+              )}
+            </div>
+
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={invitePlayer}
+              disabled={!selectedPlayer || inviting}
+            >
+              {inviting ? 'Sending Invitation...' : 'Send Invitation'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1145,21 +813,20 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
             { icon: Gamepad2, label: "Matches", screen: "matches" as const },
             { icon: Trophy, label: "Leaderboard", screen: "leaderboard" as const },
             { icon: Wallet, label: "Wallet", screen: "wallet" as const },
+            { icon: Settings, label: "Settings", screen: "settings" as const },
           ].map((item) => (
             <Button
               key={item.screen}
               variant="ghost"
               size="sm"
-              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${
-                item.screen === "squad"
-                  ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
-                  : "text-gray-400 hover:text-green-400"
-              }`}
+              className={`flex flex-col items-center space-y-1 h-auto py-2 px-3 transition-all duration-200 ${item.screen === "squad"
+                ? "text-green-400 bg-green-500/10 shadow-lg shadow-green-500/20"
+                : "text-gray-400 hover:text-green-400"
+                }`}
               onClick={() => {
                 if (item.screen !== "squad") {
-                  // Navigate to other screens using proper app navigation
                   if (onNavigate) {
-                    onNavigate(item.screen as "home" | "wallet" | "matches" | "leaderboard" | "live" | "settings");
+                    onNavigate(item.screen as "home" | "squad" | "wallet" | "matches" | "leaderboard" | "live" | "settings");
                   } else {
                     console.log('Navigation function not provided, cannot navigate to:', item.screen);
                     showToast(`Navigation to ${item.screen} not available`, "error");
@@ -1174,5 +841,23 @@ export default function SquadScreen({ onLogout, onNavigate }: { onLogout: () => 
         </div>
       </div>
     </div>
+  );
+}
+
+function CheckCircle({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
   );
 }
