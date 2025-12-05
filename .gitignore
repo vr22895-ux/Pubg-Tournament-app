@@ -31,3 +31,11 @@ android/build/
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
+
+# Documentation
+BOOTSTRAP_PLAN.md
+BUSINESS_LAUNCH_ROADMAP.md
+IMPLEMENTATION_STATUS.md
+PRODUCTION_ROADMAP.md
+USER_FLOW_EXAMPLES.md
+WALLET_CONTROLLER_REVIEW.md
