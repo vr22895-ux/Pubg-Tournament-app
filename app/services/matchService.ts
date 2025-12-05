@@ -49,5 +49,10 @@ export const matchService = {
     autoUpdateStatuses: async () => {
         const response = await api.post('/matches/auto-update-statuses');
         return response.data;
+    },
+
+    sendRoomDetails: async (matchId: string, roomId: string, roomPassword: string) => {
+        const response = await api.post(`/matches/${matchId}/room-details`, { roomId, roomPassword });
+        return response.data;
     }
 };

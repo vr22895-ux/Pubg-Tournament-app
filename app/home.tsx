@@ -12,6 +12,7 @@ import {
   Bell, Clock, Crown, Eye, Gamepad2, Home, IndianRupee, Share2, Target,
   Timer, Trophy, Users, Wallet, LogOut, Settings,
 } from "lucide-react";
+import NotificationCenter from "./components/NotificationCenter";
 
 // -------- Screen Router Type --------
 export type Screen =
@@ -256,17 +257,16 @@ export default function HomeScreen({
             </h1>
             <p className="text-sm text-gray-400">Ready for combat, soldier?</p>
           </div>
-          <div className="flex items-center space-x-3">
-            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 px-3 py-1">
-              <IndianRupee className="w-3 h-3 mr-1" />
-              {userStats.walletBalance.toLocaleString()}
-            </Badge>
+          <div className="flex items-center space-x-4">
+            <NotificationCenter />
+            <div className="flex items-center space-x-2 bg-gray-900 rounded-full px-4 py-1.5 border border-gray-800">
+              <Wallet className="w-4 h-4 text-green-500" />
+              <span className="font-bold text-green-500">₹{userStats.walletBalance}</span>
+            </div>
             <Button size="sm" variant="ghost" onClick={() => setCurrentScreen("wallet")}>
               <Wallet className="w-5 h-5 text-green-400" />
             </Button>
-            <Button size="sm" variant="ghost">
-              <Bell className="w-5 h-5 text-gray-400" />
-            </Button>
+
             <Button size="sm" variant="ghost" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
               <LogOut className="w-5 h-5" />
             </Button>
@@ -508,6 +508,6 @@ export default function HomeScreen({
           ))}
         </div>
       </div>
-    </div>
+    </div >
   );
 }

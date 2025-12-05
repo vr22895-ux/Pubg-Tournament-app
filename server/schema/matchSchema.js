@@ -33,6 +33,10 @@ const matchSchema = new mongoose.Schema({
   },
   status: { type: String, default: "upcoming", enum: ["upcoming", "live", "completed", "cancelled"] },
 
+  // Room Details (Protected)
+  roomId: { type: String, trim: true },
+  roomPassword: { type: String, trim: true },
+
   // Player Registrations
   registeredPlayers: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

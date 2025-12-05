@@ -11,6 +11,7 @@ import SquadScreen from './components/SquadScreen';
 import WalletScreen from './components/WalletScreen';
 import MyMatchesScreen from './components/MyMatchesScreen';
 import SettingsScreen from './components/SettingsScreen';
+import LeaderboardScreen from './components/LeaderboardScreen';
 
 // Main App
 export default function PUBGTournamentApp() {
@@ -112,8 +113,8 @@ export default function PUBGTournamentApp() {
       return <WalletScreenComponent />
     case "matches":
       return <MyMatchesScreen onLogout={handleLogout} onNavigate={setCurrentScreen} />
-    // case "leaderboard":
-    //   return <LeaderboardScreen />
+    case "leaderboard":
+      return <LeaderboardScreen onNavigate={setCurrentScreen} />
     case "live":
       return <LiveScreen />
     case "settings":

@@ -30,11 +30,11 @@ const UserSchema = new mongoose.Schema(
     },
 
     // Admin fields
-    role: { 
-      type: String, 
-      enum: ['user', 'admin'], 
-      default: 'user', 
-      index: true 
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+      index: true
     },
     adminEmail: {
       type: String,
@@ -51,14 +51,14 @@ const UserSchema = new mongoose.Schema(
     },
 
     // optional profile & status fields
-    name: { 
-      type: String, 
+    name: {
+      type: String,
       required: true,  // Required for user accounts
       trim: true,
       index: true
     },
     status: { type: String, enum: ['active', 'suspended', 'banned'], default: 'active', index: true },
-    
+
     // User management fields
     banReason: { type: String, trim: true },
     banExpiry: { type: Date },
@@ -69,11 +69,12 @@ const UserSchema = new mongoose.Schema(
       adminNotes: { type: String, trim: true },
       changedAt: { type: Date, default: Date.now }
     }],
+    fcmToken: { type: String, default: null }, // Firebase Cloud Messaging Token for Push Notifications
 
     // Squad fields
     squadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Squad' },
     squadRole: { type: String, enum: ['leader', 'member'], default: 'member' },
-    
+
     // audit
     lastLoginAt: { type: Date },
   },

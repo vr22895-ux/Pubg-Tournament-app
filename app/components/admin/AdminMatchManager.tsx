@@ -15,7 +15,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-    Eye, Ban, Loader2, RefreshCcw, X, Calendar, CheckCircle, AlertTriangle, Trophy, Zap
+    Eye, Ban, Loader2, RefreshCcw, X, Calendar, CheckCircle, AlertTriangle, Trophy, Zap, Key
 } from "lucide-react";
 import { MapName, RankRewardItem, summarizePrize } from "./types";
 
@@ -40,6 +40,11 @@ export default function AdminMatchManager() {
     const [rankRewards, setRankRewards] = useState<RankRewardItem[]>([]);
     const [kill, setKill] = useState({ perKill: 0, maxKills: 0 });
     const [customs, setCustoms] = useState<{ name: string; amount: number }[]>([]);
+
+    // Room Details State
+    const [showRoomDialog, setShowRoomDialog] = useState(false);
+    const [roomDetails, setRoomDetails] = useState({ matchId: "", roomId: "", roomPassword: "" });
+    const [sendingRoomDetails, setSendingRoomDetails] = useState(false);
 
     // Show toast notification
     const showToast = (message: string, type: 'success' | 'error') => {
@@ -97,6 +102,32 @@ export default function AdminMatchManager() {
             }
         } catch (error: any) {
             showToast(error?.response?.data?.error || "Failed to delete match", "error");
+        }
+    };
+
+    const handleSendRoomDetails = async () => {
+        if (!roomDetails.roomId || !roomDetails.roomPassword) {
+            showToast("Please enter both Room ID and Password", "error");
+            return;
+        }
+
+        setSendingRoomDetails(true);
+        try {
+            const response = await matchService.sendRoomDetails(
+                roomDetails.matchId,
+                roomDetails.roomId,
+                roomDetails.roomPassword
+            );
+
+            if (response.success) {
+                showToast("Room details sent to all players!", "success");
+                setShowRoomDialog(false);
+                setRoomDetails({ matchId: "", roomId: "", roomPassword: "" });
+            }
+        } catch (error: any) {
+            showToast(error?.response?.data?.error || "Failed to send room details", "error");
+        } finally {
+            setSendingRoomDetails(false);
         }
     };
 
@@ -237,6 +268,19 @@ export default function AdminMatchManager() {
                                         onClick={() => loadMatchDetails(match._id)}
                                     >
                                         <Eye className="w-4 h-4" />
+                                    </Button>
+
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-purple-500/50 text-purple-400 bg-transparent"
+                                        onClick={() => {
+                                            setRoomDetails({ matchId: match._id, roomId: match.roomId || "", roomPassword: match.roomPassword || "" });
+                                            setShowRoomDialog(true);
+                                        }}
+                                        title="Send Room ID"
+                                    >
+                                        <Key className="w-4 h-4" />
                                     </Button>
 
                                     {match.status !== "cancelled" && match.status !== "completed" && (
@@ -645,6 +689,59 @@ export default function AdminMatchManager() {
                     </div>
                 </div>
             )}
+
+            {/* Send Room Details Dialog */}
+            <Dialog open={showRoomDialog} onOpenChange={setShowRoomDialog}>
+                <DialogContent className="bg-gray-900 border-gray-800 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center text-purple-400">
+                            <Key className="w-5 h-5 mr-2" />
+                            Send Room Details
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm text-gray-400">Room ID</label>
+                            <Input
+                                value={roomDetails.roomId}
+                                onChange={(e) => setRoomDetails({ ...roomDetails, roomId: e.target.value })}
+                                className="bg-black border-gray-700 text-white"
+                                placeholder="Enter Room ID"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm text-gray-400">Room Password</label>
+                            <Input
+                                value={roomDetails.roomPassword}
+                                onChange={(e) => setRoomDetails({ ...roomDetails, roomPassword: e.target.value })}
+                                className="bg-black border-gray-700 text-white"
+                                placeholder="Enter Room Password"
+                            />
+                        </div>
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded text-xs text-yellow-200 flex items-start">
+                            <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+                            <p>This will send a Push Notification and In-App Notification to all registered players immediately.</p>
+                        </div>
+                        <Button
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={handleSendRoomDetails}
+                            disabled={sendingRoomDetails}
+                        >
+                            {sendingRoomDetails ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                <>
+                                    <Zap className="w-4 h-4 mr-2" />
+                                    Send Details Now
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -25,5 +25,6 @@ router.post('/:matchId/cancel', matchController.cancelMatch);
 router.delete('/:matchId', matchController.deleteMatch);
 router.post('/:matchId/results', matchController.uploadResults);
 router.patch('/:matchId/status', matchController.updateMatchStatus);
+router.post('/:matchId/room-details', matchController.sendRoomDetails);
 
 module.exports = router;
