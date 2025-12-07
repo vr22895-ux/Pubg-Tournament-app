@@ -523,8 +523,41 @@ exports.updateProfile = async (req, res) => {
     // Remove password from response
     const { password, adminPassword, ...userResponse } = updatedUser;
 
+    // Propagate changes to Squads and Matches
+    const Squad = require('../schema/Squad');
+    const Match = require('../schema/matchSchema');
+
+    // 1. Update Squad Members details
+    await Squad.updateMany(
+      { "members.userId": userId },
+      {
+        $set: {
+          "members.$[elem].pubgId": updateFields.pubgId || updatedUser.pubgId,
+          "members.$[elem].name": updateFields.name
+        }
+      },
+      { arrayFilters: [{ "elem.userId": userId }] }
+    );
+
+    // 2. Update Upcoming Matches registrations
+    // We only update upcoming matches to preserve history of completed ones
+    await Match.updateMany(
+      {
+        "registeredPlayers.userId": userId,
+        status: "upcoming"
+      },
+      {
+        $set: {
+          "registeredPlayers.$[elem].pubgId": updateFields.pubgId || updatedUser.pubgId,
+          "registeredPlayers.$[elem].userName": updateFields.name
+        }
+      },
+      { arrayFilters: [{ "elem.userId": userId }] }
+    );
+
     return res.json({ success: true, user: userResponse });
   } catch (e) {
+    console.error("Profile update error:", e);
     return res.status(500).json({ success: false, error: e.message || 'Failed to update profile' });
   }
 };

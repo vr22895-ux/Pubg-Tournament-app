@@ -477,13 +477,14 @@ exports.updateMatch = async (req, res) => {
 exports.joinMatch = async (req, res) => {
   try {
     const { matchId } = req.params;
-    const { userId, squadId } = req.body;
+    const userId = req.user.userId; // Securely get from token
+    const { squadId } = req.body; // squadId is still optional for squad matches
 
-    // Validate input
+    // Validate input (userId check is now redundant but kept for sanity if middleware fails)
     if (!userId) {
       return res.status(400).json({
         success: false,
-        error: 'User ID is required'
+        error: 'User ID is required' // Should be caught by middleware
       });
     }
 
@@ -606,7 +607,7 @@ exports.joinMatch = async (req, res) => {
 exports.leaveMatch = async (req, res) => {
   try {
     const { matchId } = req.params;
-    const { userId } = req.body;
+    const userId = req.user.userId; // Securely get from token
 
     // Validate input
     if (!userId) {

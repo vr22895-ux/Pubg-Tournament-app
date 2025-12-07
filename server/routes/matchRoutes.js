@@ -2,29 +2,31 @@ const express = require('express');
 const router = express.Router();
 const matchController = require('../controller/matchController');
 const userAuth = require('../middleware/userAuth');
-// const adminAuth = require('../middleware/adminAuth'); // Uncomment if needed for admin routes
+const adminAuth = require('../middleware/adminAuth');
 
 // Protected User routes (Must be before /:matchId to avoid conflict)
 router.get('/my-matches', userAuth, matchController.getMyMatches);
 
 // Public routes
 router.get('/', matchController.getAllMatches);
-router.get('/management', matchController.getAllMatchesForManagement); // Should ideally be admin protected
 router.get('/completed', matchController.getCompletedMatches);
 router.get('/:matchId', matchController.getMatchDetails);
 router.get('/:matchId/results', matchController.getMatchResults);
-router.get('/:matchId/registrations', matchController.getMatchRegistrations); // Used by admin, maybe protect?
-router.post('/:matchId/join', matchController.joinMatch); // Controller handles wallet checks, but maybe add userAuth? Controller uses body.userId
-router.post('/:matchId/leave', matchController.leaveMatch); // Controller uses body.userId
 
-// Admin/System routes (Currently unprotected or loose in server.js, keeping consistent for now)
-router.post('/', matchController.createMatch);
-router.post('/auto-update-statuses', matchController.autoUpdateMatchStatuses);
-router.put('/:matchId', matchController.updateMatch);
-router.post('/:matchId/cancel', matchController.cancelMatch);
-router.delete('/:matchId', matchController.deleteMatch);
-router.post('/:matchId/results', matchController.uploadResults);
-router.patch('/:matchId/status', matchController.updateMatchStatus);
-router.post('/:matchId/room-details', matchController.sendRoomDetails);
+// Protected User Action Routes
+router.post('/:matchId/join', userAuth, matchController.joinMatch);
+router.post('/:matchId/leave', userAuth, matchController.leaveMatch);
+
+// Admin/System routes (Protected)
+router.get('/management', adminAuth, matchController.getAllMatchesForManagement);
+router.get('/:matchId/registrations', adminAuth, matchController.getMatchRegistrations);
+router.post('/', adminAuth, matchController.createMatch);
+router.post('/auto-update-statuses', adminAuth, matchController.autoUpdateMatchStatuses); // Could be CRON but protecting for now
+router.put('/:matchId', adminAuth, matchController.updateMatch);
+router.post('/:matchId/cancel', adminAuth, matchController.cancelMatch);
+router.delete('/:matchId', adminAuth, matchController.deleteMatch);
+router.post('/:matchId/results', adminAuth, matchController.uploadResults);
+router.patch('/:matchId/status', adminAuth, matchController.updateMatchStatus);
+router.post('/:matchId/room-details', adminAuth, matchController.sendRoomDetails);
 
 module.exports = router;
