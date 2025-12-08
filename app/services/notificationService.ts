@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5050/api/notifications';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050/api";
 
 // Get auth token helper
 const getAuthHeader = () => {
