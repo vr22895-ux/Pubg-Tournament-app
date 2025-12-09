@@ -39,5 +39,15 @@ export const authService = {
     verifyOtp: async (params: { verificationId: string; code: string }) => {
         const response = await api.get('/otp/verify', { params });
         return response.data;
+    },
+
+    resetPassword: async (payload: { phone: string; email: string; verificationId: string; otp: string; newPassword: string }) => {
+        const response = await api.post('/auth/reset-password', payload);
+        return response.data;
+    },
+
+    changePassword: async (payload: { currentPassword: string; newPassword: string }) => {
+        const response = await api.post('/auth/change-password', payload);
+        return response.data;
     }
 };

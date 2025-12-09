@@ -28,20 +28,28 @@ This is the README file for the PUBG Tournament App, a comprehensive esports tou
 - **Payment Integration**: Cashfree payment gateway for secure fund additions
 - **Transaction History**: Complete transaction tracking and audit trail
 - **Match Entry Fees**: Automatic deduction for tournament participation
-- **Instant Withdrawals**: Support for quick fund withdrawals to bank accounts
+
+### Notification System
+- **Real-time Updates**: Notifications for match starts, invites, and payments
+- **In-App Alerts**: Toast notifications and notification center
+- **Status Tracking**: Read/Unread status management
+
+### Leaderboard System
+- **Global Rankings**: Track top players across all tournaments
+- **Categories**: Top Killers, Top Winners, and Rich List (Prize Money)
+- **Real-time Stats**: Aggregated automatically from match results
 
 ### Admin Panel
 - **User Management**: View, suspend, ban, and manage all users
 - **Tournament Control**: Create, edit, and manage tournaments
 - **Results Management**: Upload match results and distribute prizes
-- **Analytics Dashboard**: User statistics and platform metrics
+- **Dashboard**: Overview of platform activity
 
 ## Technology Stack
 
 ### Frontend
 - **Framework**: Next.js 14 with TypeScript
 - **UI Components**: Radix UI with Tailwind CSS
-- **Mobile Support**: React Native components for cross-platform compatibility
 - **State Management**: React hooks and local state
 - **Styling**: Tailwind CSS with custom animations and gradients
 
@@ -109,6 +117,13 @@ GET  /api/wallet/:id/transactions # Get transaction history
 POST /api/wallet/:id/deduct-entry-fee # Deduct match fee
 ```
 
+### Notification & Stats APIs
+```
+GET  /api/notifications         # Get user notifications
+PUT  /api/notifications/:id/read # Mark notification as read
+GET  /api/stats/leaderboard     # Get global leaderboard
+```
+
 ### Admin APIs
 ```
 GET  /api/admin/users           # Get all users
@@ -143,10 +158,9 @@ POST /api/admin/users/:id/unban # Unban user
 - Entry fee deductions and prize distributions
 - Financial audit trail and security logs
 
-### Invitation Collection
-- Squad invitation management
-- Invitation status tracking (pending, accepted, declined)
-- Invitation history and audit trail
+### Notification Collection
+- User notifications and read status
+- Notification types and metadata
 
 ## User Flow
 

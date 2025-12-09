@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native'; // Using RN components for layout structure if needed, but we are in Next.js so using divs
+// import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native'; // Removed unused RN import
 import { statsService, LeaderboardEntry } from '../services/statsService';
 import { Trophy, Crosshair, DollarSign, Crown, Medal, User, Home, Users, Gamepad2, Wallet, Settings } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';

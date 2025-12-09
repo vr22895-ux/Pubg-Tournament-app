@@ -18,4 +18,12 @@ router.post('/admin/create', authController.createAdmin);
 router.put('/profile/update', authController.updateProfile);
 router.post('/profile/verify-phone', authController.verifyPhoneNumber);
 
+// Password Management
+router.post('/reset-password', authController.resetPassword); // Public (uses OTP)
+// Note: change-password should be protected usually, but here we attach userAuth in server.js or inside controller?
+// Actually routes here are mounted at /api/auth. server.js doesn't apply userAuth to /api/auth globally.
+// We need to apply userAuth for change-password.
+const userAuth = require('../middleware/userAuth');
+router.post('/change-password', userAuth, authController.changePassword);
+
 module.exports = router;

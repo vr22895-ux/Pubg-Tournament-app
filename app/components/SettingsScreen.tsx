@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Save, Home, Users, Gamepad2, Trophy, Wallet, LogOut } from "lucide-react";
+import { Settings, Save, Home, Users, Gamepad2, Trophy, Wallet, LogOut, Lock } from "lucide-react";
 
 export default function SettingsScreen({
     onLogout,
@@ -26,6 +26,8 @@ export default function SettingsScreen({
         pubgId: "",
         phone: ""
     });
+    const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
+    const [changingPassword, setChangingPassword] = useState(false);
 
     useEffect(() => {
         loadProfile();
@@ -109,6 +111,47 @@ export default function SettingsScreen({
             setError(err.response?.data?.error || err.message || "Failed to update profile");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleChangePassword = async () => {
+        try {
+            setChangingPassword(true);
+            setError(null);
+            setSuccess(null);
+
+            if (!passwords.current || !passwords.new || !passwords.confirm) {
+                setError("Please enter current, new, and confirm password");
+                return;
+            }
+            if (passwords.new.length < 6) {
+                setError("New password must be at least 6 characters");
+                return;
+            }
+            if (passwords.new !== passwords.confirm) {
+                setError("New passwords do not match");
+                return;
+            }
+
+            const response = await authService.changePassword({
+                currentPassword: passwords.current,
+                newPassword: passwords.new
+            });
+
+            if (response.success) {
+                setSuccess("Password changed successfully! Logging out...");
+                setPasswords({ current: "", new: "", confirm: "" });
+                setTimeout(() => {
+                    onLogout();
+                }, 1500);
+            } else {
+                setError(response.error || "Failed to change password");
+            }
+        } catch (err: any) {
+            console.error("Error changing password:", err);
+            setError(err.response?.data?.error || err.message || "Failed to change password");
+        } finally {
+            setChangingPassword(false);
         }
     };
 
@@ -209,6 +252,59 @@ export default function SettingsScreen({
                         </Button>
                     </CardContent>
                 </Card>
+
+                <Card className="bg-gray-900 border-green-500/20">
+                    <CardHeader>
+                        <CardTitle className="text-white flex items-center">
+                            <Lock className="w-5 h-5 mr-2" />
+                            Security
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="currentPassword" className="text-gray-300">Current Password</Label>
+                            <Input
+                                id="currentPassword"
+                                type="password"
+                                value={passwords.current}
+                                onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+                                className="bg-black border-gray-700 text-white"
+                                placeholder="******"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="newPassword" className="text-gray-300">New Password</Label>
+                            <Input
+                                id="newPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                value={passwords.new}
+                                onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+                                className="bg-black border-gray-700 text-white"
+                                placeholder="Min 6 characters"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="confirmPassword" className="text-gray-300">Confirm New Password</Label>
+                            <Input
+                                id="confirmPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                value={passwords.confirm}
+                                onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+                                className="bg-black border-gray-700 text-white"
+                                placeholder="Re-enter new password"
+                            />
+                        </div>
+                        <Button
+                            className="w-full bg-gray-800 hover:bg-gray-700 text-white border border-gray-700"
+                            onClick={handleChangePassword}
+                            disabled={changingPassword}
+                        >
+                            {changingPassword ? "Updating..." : "Change Password"}
+                        </Button>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Bottom Navigation */}
@@ -234,6 +330,6 @@ export default function SettingsScreen({
                     ))}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

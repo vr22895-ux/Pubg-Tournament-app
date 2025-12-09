@@ -163,7 +163,8 @@ exports.register = async (req, res) => {
     if (!name) return res.status(400).json({ success: false, error: 'name is required' });
 
     // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash the password (trimmed)
+    const hashedPassword = await bcrypt.hash(String(password).trim(), 12);
 
     const update = {
       phone: digits,
@@ -252,7 +253,8 @@ exports.login = async (req, res) => {
     }
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // Verify password (trimmed comparison)
+    const isValidPassword = await bcrypt.compare(String(password).trim(), user.password);
     if (!isValidPassword) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
@@ -612,5 +614,99 @@ exports.verifyPhoneNumber = async (req, res) => {
     return res.json({ success: true, user: userResponse, message: 'Phone number verified successfully' });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message || 'Failed to verify phone number' });
+  }
+};
+
+/**
+ * POST /api/auth/reset-password
+ * body: { phone, verificationId, otp, newPassword }
+ * Verifies OTP and resets the user's password
+ */
+exports.resetPassword = async (req, res) => {
+  try {
+    const { phone, email, verificationId, otp, newPassword } = req.body || {};
+
+    if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required' });
+    if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
+    if (!verificationId) return res.status(400).json({ success: false, error: 'Verification ID is required' });
+    if (!otp) return res.status(400).json({ success: false, error: 'OTP is required' });
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+    }
+
+    // 1. Verify OTP again server-side to prevent bypassing
+    try {
+      const otpResponse = await axios.get(`${process.env.OTP_API_URL || 'http://localhost:5050'}/api/otp/verify`, {
+        params: { verificationId, code: otp.replace(/\D/g, "") },
+      });
+
+      if (!otpResponse.data?.success) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
+      }
+    } catch (otpError) {
+      return res.status(400).json({ success: false, error: 'OTP verification failed' });
+    }
+
+    // 2. Find user by phone AND email to ensure unique match
+    const digits = String(phone).replace(/\D/g, '');
+    const user = await User.findOne({
+      phone: digits,
+      email: String(email).trim().toLowerCase(),
+      role: 'user'
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found or email/phone mismatch' });
+    }
+
+    // 3. Hash new password (trimmed)
+    const hashedPassword = await bcrypt.hash(String(newPassword).trim(), 12);
+
+    // 4. Update password
+    user.password = hashedPassword;
+    user.updatedAt = new Date();
+    await user.save();
+
+    return res.json({ success: true, message: 'Password reset successfully' });
+
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message || 'Failed to reset password' });
+  }
+};
+
+/**
+ * POST /api/auth/change-password
+ * body: { currentPassword, newPassword }
+ * Changes password for logged-in user
+ */
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword) return res.status(400).json({ success: false, error: 'Current password is required' });
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+    }
+
+    // 1. Find user
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    // 2. Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      return res.status(401).json({ success: false, error: 'Incorrect current password' });
+    }
+
+    // 3. Update to new password
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.updatedAt = new Date();
+    await user.save();
+
+    return res.json({ success: true, message: 'Password changed successfully' });
+
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message || 'Failed to change password' });
   }
 };
