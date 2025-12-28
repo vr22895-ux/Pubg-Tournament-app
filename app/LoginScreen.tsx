@@ -584,7 +584,7 @@ export default function LoginScreen({ setIsLoggedIn, setCurrentScreen, setUserRo
                     1. Add state variables at top of component.
                     2. Replace the `return` JSX block.
                     */}
-            // ... (I will rely on the tool to handle the logic. I will provide the FULL implementation of the component logic where needed).
+            {/* // ... (I will rely on the tool to handle the logic. I will provide the FULL implementation of the component logic where needed). */}
               </div>
             )}
 
